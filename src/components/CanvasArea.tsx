@@ -33,6 +33,14 @@ export default function CanvasArea() {
     const selectedElementIdRef = useRef(selectedElementId)
     const layersRef = useRef(layers)
 
+    /////
+
+    const isDraggingRef = useRef(false)
+    const dragStartMouseRef = useRef({ x: 0, y: 0 })
+    const dragStartPosRef = useRef({ x: 0, y: 0 })
+    const updateElement = useEditorStore(state => state.updateElement)
+    const didDragRef = useRef(false)
+
     function hitTest(element: BaseElement, x: number, y: number): boolean {
         return (
             x >= element.position.x &&
@@ -49,6 +57,7 @@ export default function CanvasArea() {
         activeLayerIdRef.current = activeLayerId
         layersRef.current = layers
         selectedElementIdRef.current = selectedElementId
+
     })
 
     // when a project is created, fit the artboard to screen
@@ -185,18 +194,67 @@ export default function CanvasArea() {
                 isPanningRef.current = true
                 lastMouseRef.current = { x: e.clientX, y: e.clientY }
             }
+
+            if (e.button === 0 && activeToolRef.current === 'select') {
+                didDragRef.current = false
+                const worldX = (e.offsetX - panRef.current.x) / zoomRef.current
+                const worldY = (e.offsetY - panRef.current.y) / zoomRef.current
+
+                const selected = selectedElementIdRef.current
+                if (!selected) return
+
+                // find the element
+                for (const layer of layersRef.current) {
+                    const element = layer.elements.find(e => e.id === selected)
+                    if (element && hitTest(element, worldX, worldY)) {
+                        isDraggingRef.current = true
+                        dragStartMouseRef.current = { x: worldX, y: worldY }
+                        dragStartPosRef.current = { ...element.position }
+                        break
+                    }
+                }
+            }
         }
 
         const handleMouseMove = (e: MouseEvent) => {
-            if (!isPanningRef.current) return
-            const dx = e.clientX - lastMouseRef.current.x
-            const dy = e.clientY - lastMouseRef.current.y
-            lastMouseRef.current = { x: e.clientX, y: e.clientY }
-            setPan(p => ({ x: p.x + dx, y: p.y + dy }))
+            if (isPanningRef.current) {
+                const dx = e.clientX - lastMouseRef.current.x
+                const dy = e.clientY - lastMouseRef.current.y
+                lastMouseRef.current = { x: e.clientX, y: e.clientY }
+                setPan(p => ({ x: p.x + dx, y: p.y + dy }))
+            }
+            if (isDraggingRef.current) {
+                didDragRef.current = true
+                const rect = canvas.getBoundingClientRect()
+                const offsetX = e.clientX - rect.left
+                const offsetY = e.clientY - rect.top
+                const worldX = (offsetX - panRef.current.x) / zoomRef.current
+                const worldY = (offsetY - panRef.current.y) / zoomRef.current
+
+                const dx = worldX - dragStartMouseRef.current.x
+                const dy = worldY - dragStartMouseRef.current.y
+
+                const selected = selectedElementIdRef.current
+                if (!selected) return
+
+                for (const layer of layersRef.current) {
+                    const element = layer.elements.find(e => e.id === selected)
+                    if (element) {
+                        updateElement(layer.id, selected, {
+                            position: {
+                                x: dragStartPosRef.current.x + dx,
+                                y: dragStartPosRef.current.y + dy,
+                            }
+                        })
+                        break
+                    }
+                }
+            }
         }
 
         const handleMouseUp = (e: MouseEvent) => {
             if (e.button === 1) isPanningRef.current = false
+            if (e.button === 0) isDraggingRef.current = false
         }
 
         // passive: false lets us call preventDefault on wheel
@@ -206,6 +264,11 @@ export default function CanvasArea() {
         window.addEventListener('mouseup', handleMouseUp)
 
         const handleClick = (e: MouseEvent) => {
+            if (didDragRef.current) { //to prevent instant selection other object when moving over another one
+                didDragRef.current = false
+                return
+            }
+
             const tool = activeToolRef.current
             if (tool === 'select') {
                 const worldX = (e.offsetX - panRef.current.x) / zoomRef.current
