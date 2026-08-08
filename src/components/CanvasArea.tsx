@@ -4,15 +4,30 @@ import Breadcrumb from './Breadcrumb'
 import './CanvasArea.css'
 import { type BaseElement } from '../types/schema'
 
-function hitTest(element: BaseElement, x: number, y: number): boolean {
-    return (
-        x >= element.position.x &&
-        x <= element.position.x + element.size.width &&
-        y >= element.position.y &&
-        y <= element.position.y + element.size.height
-    )
+const degToRad = (degrees: number) => degrees * Math.PI / 180
+
+const normalizeDegrees = (degrees: number) => {
+    return ((degrees % 360) + 360) % 360
 }
 
+
+function hitTest(element: BaseElement, x: number, y: number): boolean {
+    const cx = element.position.x + element.size.width / 2
+    const cy = element.position.y + element.size.height / 2
+    const cos = Math.cos(-element.rotation)
+    const sin = Math.sin(-element.rotation)
+    const dx = x - cx
+    const dy = y - cy
+    const localX = cx + dx * cos - dy * sin
+    const localY = cy + dx * sin + dy * cos
+
+    return (
+        localX >= element.position.x &&
+        localX <= element.position.x + element.size.width &&
+        localY >= element.position.y &&
+        localY <= element.position.y + element.size.height
+    )
+}
 type HandleName = 'n' | 's' | 'e' | 'w' | 'nw' | 'ne' | 'sw' | 'se' | 'rotate'
 
 interface Handle {
@@ -65,8 +80,11 @@ const HANDLE_CURSORS: Record<HandleName, string> = {
 function toLocalSpace(worldX: number, worldY: number, element: BaseElement) {
     const cx = element.position.x + element.size.width / 2
     const cy = element.position.y + element.size.height / 2
-    const cos = Math.cos(-element.rotation)
-    const sin = Math.sin(-element.rotation)
+
+    const rotation = degToRad(element.rotation)
+
+    const cos = Math.cos(-rotation)
+    const sin = Math.sin(-rotation)
     const dx = worldX - cx
     const dy = worldY - cy
     return {
@@ -76,8 +94,9 @@ function toLocalSpace(worldX: number, worldY: number, element: BaseElement) {
 }
 
 function rotatePoint(dx: number, dy: number, angle: number) {
-    const cos = Math.cos(-angle)
-    const sin = Math.sin(-angle)
+    const radians = degToRad(angle)
+    const cos = Math.cos(-radians)
+    const sin = Math.sin(-radians)
     return {
         x: dx * cos - dy * sin,
         y: dx * sin + dy * cos,
@@ -91,9 +110,10 @@ function computeResize(
     rotation: number,
     alt: boolean
 ) {
+    const radians = degToRad(rotation)
     const MIN = 1
-    const cos = Math.cos(rotation)
-    const sin = Math.sin(rotation)
+    const cos = Math.cos(radians)
+    const sin = Math.sin(radians)
 
     // compute new size
     let nw = b.width
@@ -273,7 +293,7 @@ export default function CanvasArea() {
 
                 ctx.save()
                 ctx.translate(cx, cy)
-                ctx.rotate(element.rotation)
+                ctx.rotate(degToRad(element.rotation))
                 ctx.translate(-cx, -cy)
 
                 if (element.type === 'rectangle') {
@@ -314,7 +334,7 @@ export default function CanvasArea() {
 
                     ctx.save()
                     ctx.translate(cx, cy)
-                    ctx.rotate(element.rotation)
+                    ctx.rotate(degToRad(element.rotation))
                     ctx.translate(-cx, -cy)
 
                     const handles = getHandles(element, PADDING)
@@ -435,7 +455,11 @@ export default function CanvasArea() {
                                 isRotatingRef.current = true
                                 const cx = element.position.x + element.size.width / 2
                                 const cy = element.position.y + element.size.height / 2
-                                rotateStartAngleRef.current = Math.atan2(worldY - cy, worldX - cx)
+                                rotateStartAngleRef.current =
+                                    Math.atan2(
+                                        worldY - cy,
+                                        worldX - cx
+                                    ) * 180 / Math.PI
                                 rotateStartElementAngleRef.current = element.rotation
                                 return
                             }
@@ -601,9 +625,12 @@ export default function CanvasArea() {
                         const cx = element.position.x + element.size.width / 2
                         const cy = element.position.y + element.size.height / 2
                         const angle = Math.atan2(worldY - cy, worldX - cx)
-                        const delta = angle - rotateStartAngleRef.current
+                        const angleDegrees = angle * 180 / Math.PI
+                        const delta = angleDegrees - rotateStartAngleRef.current
                         updateElement(layer.id, selected, {
-                            rotation: rotateStartElementAngleRef.current + delta
+                            rotation: normalizeDegrees(
+                                rotateStartElementAngleRef.current + delta
+                            )
                         })
                         break
                     }

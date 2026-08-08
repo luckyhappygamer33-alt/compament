@@ -35,3 +35,128 @@
     text-align: center;
     margin-top: 24px;
 }
+
+.properties-panel {
+    width: var(--panel-width);
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--color-border);
+    background: var(--color-panel);
+    flex-shrink: 0;
+    overflow: hidden;
+}
+
+.panel-header {
+    height: 36px;
+    padding: 0 12px;
+    display: flex;
+    align-items: center;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    border-bottom: 1px solid var(--color-border);
+    flex-shrink: 0;
+}
+
+.panel-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+}
+
+.panel-empty {
+    font-size: 12px;
+    color: var(--color-text-dim);
+    display: block;
+    text-align: center;
+    margin-top: 24px;
+}
+
+.property-groups {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.property-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.property-group-title {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 2px;
+}
+
+.property-row {
+    display: grid;
+    grid-template-columns: 16px minmax(0, 1fr) 16px minmax(0, 1fr);
+    align-items: center;
+    gap: 6px;
+}
+
+.property-row-single {
+    grid-template-columns: 64px minmax(0, 1fr) auto;
+}
+
+.property-row label {
+    font-size: 11px;
+    color: var(--color-text-muted);
+}
+
+.property-row input,
+.property-row select {
+    width: 100%;
+    min-width: 0;
+    height: 26px;
+    box-sizing: border-box;
+    padding: 0 7px;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    background: var(--color-panel);
+    color: var(--color-text);
+    font-size: 11px;
+    outline: none;
+}
+
+.property-row input:focus,
+.property-row select:focus {
+    border-color: var(--color-accent);
+}
+
+.property-unit {
+    font-size: 11px;
+    color: var(--color-text-dim);
+}
+
+.property-value {
+    font-size: 11px;
+    color: var(--color-text-muted);
+}
+
+.color-control {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+}
+
+.color-control span {
+    font-size: 10px;
+    color: var(--color-text-muted);
+    font-family: monospace;
+}
+
+.color-input {
+    width: 28px !important;
+    height: 26px !important;
+    padding: 2px !important;
+    cursor: pointer;
+}

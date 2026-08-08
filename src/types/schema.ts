@@ -9,7 +9,7 @@
 
 type ID = string
 
-interface Color {
+export interface Color {
     r: number   // 0-255
     g: number   // 0-255
     b: number   // 0-255
@@ -112,7 +112,7 @@ interface ComponentInstanceElement extends BaseElement {
     variantId?: ID  // if absent, uses the base component
 }
 
-type Element =
+export type Element =
     | RectangleElement
     | EllipseElement
     | TextElement
