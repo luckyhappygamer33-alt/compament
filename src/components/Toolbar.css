@@ -1,0 +1,81 @@
+.toolbar {
+    height: var(--toolbar-height);
+    background: var(--color-panel);
+    border-bottom: 1px solid var(--color-border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 12px;
+    flex-shrink: 0;
+}
+
+.toolbar-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.toolbar-logo {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--color-text);
+    letter-spacing: 0.5px;
+}
+
+.toolbar-divider {
+    width: 1px;
+    height: 18px;
+    background: var(--color-border);
+}
+
+.toolbar-tools {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.tool-btn {
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.1s, color 0.1s;
+}
+
+.tool-btn:hover {
+    background: var(--color-hover);
+    color: var(--color-text);
+}
+
+.tool-btn.active {
+    background: var(--color-accent);
+    color: #fff;
+}
+
+.toolbar-right {
+    display: flex;
+    align-items: center;
+}
+
+.export-btn {
+    height: 26px;
+    padding: 0 14px;
+    border: 1px solid var(--color-border);
+    border-radius: 5px;
+    background: transparent;
+    color: var(--color-text);
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.1s;
+}
+
+.export-btn:hover {
+    background: var(--color-hover);
+}

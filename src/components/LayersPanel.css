@@ -1,0 +1,99 @@
+.layers-panel {
+    display: flex;
+    flex-direction: column;
+    border-bottom: 1px solid var(--color-border);
+    /* takes only the space it needs — rest of sidebar is free for component library */
+}
+
+.layers-panel .panel-header {
+    height: 36px;
+    padding: 0 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    border-bottom: 1px solid var(--color-border);
+    flex-shrink: 0;
+}
+
+.add-layer-btn {
+    width: 20px;
+    height: 20px;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--color-text-muted);
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    transition: background 0.1s, color 0.1s;
+}
+
+.add-layer-btn:hover {
+    background: var(--color-hover);
+    color: var(--color-text);
+}
+
+.layers-list {
+    display: flex;
+    flex-direction: column;
+}
+
+.layer-row {
+    height: 30px;
+    padding: 0 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    transition: background 0.1s;
+    border-bottom: 1px solid var(--color-border-light);
+}
+
+.layer-row:hover {
+    background: var(--color-hover);
+}
+
+.layer-row.active {
+    background: rgba(74, 144, 217, 0.15);
+}
+
+.layer-row.root-row {
+    background: rgba(201, 146, 58, 0.08);
+}
+
+.layer-row.root-row:hover {
+    background: rgba(201, 146, 58, 0.15);
+}
+
+.layer-icon {
+    font-size: 10px;
+    color: var(--color-text-dim);
+}
+
+.layer-name {
+    flex: 1;
+    font-size: 12px;
+    color: var(--color-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.root-badge {
+    font-size: 9px;
+    font-weight: 600;
+    color: var(--color-root-badge);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    background: rgba(201, 146, 58, 0.15);
+    padding: 1px 5px;
+    border-radius: 3px;
+}

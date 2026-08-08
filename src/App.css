@@ -1,0 +1,22 @@
+.app {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    width: 100vw;
+    overflow: hidden;
+}
+
+.app-body {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+
+/* right sidebar stacks layers on top, empty space below (component library later) */
+.right-sidebar {
+    width: var(--panel-width);
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid var(--color-border);
+    background: var(--color-panel);
+}

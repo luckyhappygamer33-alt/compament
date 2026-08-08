@@ -129,23 +129,9 @@ interface Layer {
     name: string
     visible: boolean
     locked: boolean
+    isRoot: boolean
     elements: Element[]  // all elements in this layer
 }
-
-
-// ============================================================
-// ROOT OBJECT — special slot at the bottom of every editor
-// ============================================================
-
-// Root object defines the bounds of its editor.
-// It holds at most one element (or none if empty).
-// It cannot be double-clicked — no recursive opening.
-interface RootObject {
-    element: Element | null   // null = empty root (fresh editor)
-    style: ElementStyle       // root itself can be styled independently
-    margin: number            // breathing room between root edge and content inside
-}
-
 
 // ============================================================
 // EDITOR — the core workspace

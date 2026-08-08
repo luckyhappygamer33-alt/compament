@@ -1,0 +1,41 @@
+.breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 0 12px;
+    height: 100%;
+}
+
+.breadcrumb-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.breadcrumb-sep {
+    color: var(--color-text-dim);
+    font-size: 12px;
+}
+
+.breadcrumb-label {
+    font-size: 12px;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 3px;
+    transition: background 0.1s, color 0.1s;
+}
+
+.breadcrumb-label:hover {
+    background: var(--color-hover);
+    color: var(--color-text);
+}
+
+.breadcrumb-label.active {
+    color: var(--color-text);
+    cursor: default;
+}
+
+.breadcrumb-label.active:hover {
+    background: transparent;
+}
