@@ -4,6 +4,56 @@ import Breadcrumb from './Breadcrumb'
 import './CanvasArea.css'
 import { type BaseElement } from '../types/schema'
 
+function hitTest(element: BaseElement, x: number, y: number): boolean {
+    return (
+        x >= element.position.x &&
+        x <= element.position.x + element.size.width &&
+        y >= element.position.y &&
+        y <= element.position.y + element.size.height
+    )
+}
+
+type HandleName = 'n' | 's' | 'e' | 'w' | 'nw' | 'ne' | 'sw' | 'se'
+
+interface Handle {
+    name: HandleName
+    x: number
+    y: number
+}
+
+function getHandles(element: BaseElement, padding: number): Handle[] {
+    const { x, y } = element.position
+    const { width, height } = element.size
+    const l = x - padding
+    const r = x + width + padding
+    const t = y - padding
+    const b = y + height + padding
+    const mx = (l + r) / 2
+    const my = (t + b) / 2
+
+    return [
+        { name: 'nw', x: l, y: t },
+        { name: 'n', x: mx, y: t },
+        { name: 'ne', x: r, y: t },
+        { name: 'e', x: r, y: my },
+        { name: 'se', x: r, y: b },
+        { name: 's', x: mx, y: b },
+        { name: 'sw', x: l, y: b },
+        { name: 'w', x: l, y: my },
+    ]
+}
+
+const HANDLE_CURSORS: Record<HandleName, string> = {
+    nw: 'nwse-resize',
+    se: 'nwse-resize',
+    ne: 'nesw-resize',
+    sw: 'nesw-resize',
+    n: 'ns-resize',
+    s: 'ns-resize',
+    e: 'ew-resize',
+    w: 'ew-resize',
+}
+
 export default function CanvasArea() {
     const canvasRef = useRef<HTMLCanvasElement>(null)
     const artboardSize = useEditorStore(state => state.artboardSize)
@@ -41,14 +91,14 @@ export default function CanvasArea() {
     const updateElement = useEditorStore(state => state.updateElement)
     const didDragRef = useRef(false)
 
-    function hitTest(element: BaseElement, x: number, y: number): boolean {
-        return (
-            x >= element.position.x &&
-            x <= element.position.x + element.size.width &&
-            y >= element.position.y &&
-            y <= element.position.y + element.size.height
-        )
-    }
+    /////
+    const [hoveredHandle, setHoveredHandle] = useState<HandleName | null>(null)
+    const hoveredHandleRef = useRef<HandleName | null>(null)
+
+    const isResizingRef = useRef(false)
+    const activeHandleRef = useRef<HandleName | null>(null)
+    const resizeStartMouseRef = useRef({ x: 0, y: 0 })
+    const resizeStartBoundsRef = useRef({ x: 0, y: 0, width: 0, height: 0 })
 
     useEffect(() => {
         zoomRef.current = zoom
@@ -57,7 +107,7 @@ export default function CanvasArea() {
         activeLayerIdRef.current = activeLayerId
         layersRef.current = layers
         selectedElementIdRef.current = selectedElementId
-
+        hoveredHandleRef.current = hoveredHandle
     })
 
     // when a project is created, fit the artboard to screen
@@ -142,26 +192,47 @@ export default function CanvasArea() {
             }
         }
 
-        // draw selection outline
+        // draw selection box
         if (selectedElementId) {
             for (const layer of layers) {
                 const element = layer.elements.find(e => e.id === selectedElementId)
                 if (element) {
-                    ctx.strokeStyle = '#4a90d9'
+                    const PADDING = 10
+                    const handles = getHandles(element, PADDING)
+                    const handleSize = 8 / zoom
+
+                    //selection outline
+                    ctx.strokeStyle = '#7bb4f1'
                     ctx.lineWidth = 2 / zoom  // stays 2px regardless of zoom level
                     ctx.strokeRect(
-                        element.position.x - 10,
-                        element.position.y - 10,
-                        element.size.width + 20,
-                        element.size.height + 20
+                        element.position.x - PADDING,
+                        element.position.y - PADDING,
+                        element.size.width + (2 * PADDING),
+                        element.size.height + (2 * PADDING)
                     )
+
+                    // handles
+                    for (const handle of handles) {
+                        const isHovered = hoveredHandle === handle.name
+                        const hs = isHovered ? handleSize * 1.3 : handleSize
+
+                        ctx.fillStyle = isHovered ? '#4a90d9' : '#ffffff'
+                        ctx.strokeStyle = '#4a90d9'
+                        ctx.lineWidth = 1.5 / zoom
+
+                        ctx.beginPath()
+                        ctx.rect(handle.x - hs / 2, handle.y - hs / 2, hs, hs)
+                        ctx.fill()
+                        ctx.stroke()
+                    }
+
                     break
                 }
             }
         }
 
         ctx.restore()
-    }, [artboardSize, zoom, pan, layers, selectedElementId])
+    }, [artboardSize, zoom, pan, layers, selectedElementId, hoveredHandle])
 
     // event listeners — registered once, use refs for current values
     useEffect(() => {
@@ -203,6 +274,35 @@ export default function CanvasArea() {
                 const selected = selectedElementIdRef.current
                 if (!selected) return
 
+                if (selected) {
+                    const hitSize = 10 / zoomRef.current
+                    for (const layer of layersRef.current) {
+                        const element = layer.elements.find((el: Element) => el.id === selected)
+                        if (element) {
+                            const handles = getHandles(element, 10)
+                            for (const handle of handles) {
+                                if (
+                                    worldX >= handle.x - hitSize / 2 &&
+                                    worldX <= handle.x + hitSize / 2 &&
+                                    worldY >= handle.y - hitSize / 2 &&
+                                    worldY <= handle.y + hitSize / 2
+                                ) {
+                                    isResizingRef.current = true
+                                    activeHandleRef.current = handle.name
+                                    resizeStartMouseRef.current = { x: worldX, y: worldY }
+                                    resizeStartBoundsRef.current = {
+                                        x: element.position.x,
+                                        y: element.position.y,
+                                        width: element.size.width,
+                                        height: element.size.height,
+                                    }
+                                    return
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // find the element
                 for (const layer of layersRef.current) {
                     const element = layer.elements.find(e => e.id === selected)
@@ -217,6 +317,39 @@ export default function CanvasArea() {
         }
 
         const handleMouseMove = (e: MouseEvent) => {
+            // handle hover detection
+            const selected = selectedElementIdRef.current
+            if (selected && activeToolRef.current === 'select' && !isDraggingRef.current) {
+                const worldX = (e.offsetX - panRef.current.x) / zoomRef.current
+                const worldY = (e.offsetY - panRef.current.y) / zoomRef.current
+                const hitSize = 10 / zoomRef.current
+
+                let found: HandleName | null = null
+
+                for (const layer of layersRef.current) {
+                    const element = layer.elements.find((e: Element) => e.id === selected)
+                    if (element) {
+                        const handles = getHandles(element, 10)
+                        for (const handle of handles) {
+                            if (
+                                worldX >= handle.x - hitSize / 2 &&
+                                worldX <= handle.x + hitSize / 2 &&
+                                worldY >= handle.y - hitSize / 2 &&
+                                worldY <= handle.y + hitSize / 2
+                            ) {
+                                found = handle.name
+                                break
+                            }
+                        }
+                        break
+                    }
+                }
+
+                if (found !== hoveredHandleRef.current) {
+                    setHoveredHandle(found)
+                    canvas.style.cursor = found ? HANDLE_CURSORS[found] : 'default'
+                }
+            }
             if (isPanningRef.current) {
                 const dx = e.clientX - lastMouseRef.current.x
                 const dy = e.clientY - lastMouseRef.current.y
@@ -250,11 +383,70 @@ export default function CanvasArea() {
                     }
                 }
             }
+            if (isResizingRef.current) {
+                didDragRef.current = true
+                const rect = canvas.getBoundingClientRect()
+                const worldX = (e.clientX - rect.left - panRef.current.x) / zoomRef.current
+                const worldY = (e.clientY - rect.top - panRef.current.y) / zoomRef.current
+
+                const dx = worldX - resizeStartMouseRef.current.x
+                const dy = worldY - resizeStartMouseRef.current.y
+                const b = resizeStartBoundsRef.current
+                const alt = e.altKey
+                const MIN = 1
+
+                let x = b.x
+                let y = b.y
+                let w = b.width
+                let h = b.height
+
+                const handle = activeHandleRef.current
+
+                // horizontal
+                if (handle === 'e' || handle === 'ne' || handle === 'se') {
+                    w = Math.max(MIN, b.width + (alt ? dx * 2 : dx))
+                    if (alt) x = b.x - dx
+                }
+                if (handle === 'w' || handle === 'nw' || handle === 'sw') {
+                    const newW = Math.max(MIN, b.width - (alt ? dx * 2 : dx))
+                    x = alt ? b.x - (newW - b.width) / 2 : b.x + (b.width - newW)
+                    w = newW
+                }
+
+                // vertical
+                if (handle === 's' || handle === 'se' || handle === 'sw') {
+                    h = Math.max(MIN, b.height + (alt ? dy * 2 : dy))
+                    if (alt) y = b.y - dy
+                }
+                if (handle === 'n' || handle === 'ne' || handle === 'nw') {
+                    const newH = Math.max(MIN, b.height - (alt ? dy * 2 : dy))
+                    y = alt ? b.y - (newH - b.height) / 2 : b.y + (b.height - newH)
+                    h = newH
+                }
+
+                const selected = selectedElementIdRef.current
+                if (!selected) return
+
+                for (const layer of layersRef.current) {
+                    const element = layer.elements.find((el: Element) => el.id === selected)
+                    if (element) {
+                        updateElement(layer.id, selected, {
+                            position: { x, y },
+                            size: { width: w, height: h },
+                        })
+                        break
+                    }
+                }
+            }
         }
 
         const handleMouseUp = (e: MouseEvent) => {
             if (e.button === 1) isPanningRef.current = false
-            if (e.button === 0) isDraggingRef.current = false
+            if (e.button === 0) {
+                isDraggingRef.current = false
+                isResizingRef.current = false
+                activeHandleRef.current = null
+            }
         }
 
         // passive: false lets us call preventDefault on wheel
