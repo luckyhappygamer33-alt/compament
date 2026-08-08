@@ -13,7 +13,7 @@ function hitTest(element: BaseElement, x: number, y: number): boolean {
     )
 }
 
-type HandleName = 'n' | 's' | 'e' | 'w' | 'nw' | 'ne' | 'sw' | 'se'
+type HandleName = 'n' | 's' | 'e' | 'w' | 'nw' | 'ne' | 'sw' | 'se' | 'rotate'
 
 interface Handle {
     name: HandleName
@@ -43,6 +43,13 @@ function getHandles(element: BaseElement, padding: number): Handle[] {
     ]
 }
 
+function getRotateHandle(element: BaseElement, padding: number, zoom: number) {
+    const cx = element.position.x + element.size.width / 2 //center x
+    const ty = element.position.y - padding //top y
+    const offset = 30 / zoom  // constant screen distance regardless of zoom
+    return { x: cx, y: ty - offset }
+}
+
 const HANDLE_CURSORS: Record<HandleName, string> = {
     nw: 'nwse-resize',
     se: 'nwse-resize',
@@ -52,6 +59,97 @@ const HANDLE_CURSORS: Record<HandleName, string> = {
     s: 'ns-resize',
     e: 'ew-resize',
     w: 'ew-resize',
+    rotate: 'crosshair'
+}
+
+function toLocalSpace(worldX: number, worldY: number, element: BaseElement) {
+    const cx = element.position.x + element.size.width / 2
+    const cy = element.position.y + element.size.height / 2
+    const cos = Math.cos(-element.rotation)
+    const sin = Math.sin(-element.rotation)
+    const dx = worldX - cx
+    const dy = worldY - cy
+    return {
+        x: cx + dx * cos - dy * sin,
+        y: cy + dx * sin + dy * cos,
+    }
+}
+
+function rotatePoint(dx: number, dy: number, angle: number) {
+    const cos = Math.cos(-angle)
+    const sin = Math.sin(-angle)
+    return {
+        x: dx * cos - dy * sin,
+        y: dx * sin + dy * cos,
+    }
+}
+
+function computeResize(
+    handle: HandleName,
+    b: { x: number, y: number, width: number, height: number },
+    local: { x: number, y: number },
+    rotation: number,
+    alt: boolean
+) {
+    const MIN = 1
+    const cos = Math.cos(rotation)
+    const sin = Math.sin(rotation)
+
+    // compute new size
+    let nw = b.width
+    let nh = b.height
+
+    if (handle === 'e' || handle === 'ne' || handle === 'se')
+        nw = Math.max(MIN, b.width + (alt ? local.x * 2 : local.x))
+    if (handle === 'w' || handle === 'nw' || handle === 'sw')
+        nw = Math.max(MIN, b.width - (alt ? local.x * 2 : local.x))
+    if (handle === 's' || handle === 'se' || handle === 'sw')
+        nh = Math.max(MIN, b.height + (alt ? local.y * 2 : local.y))
+    if (handle === 'n' || handle === 'ne' || handle === 'nw')
+        nh = Math.max(MIN, b.height - (alt ? local.y * 2 : local.y))
+
+    // alt: center stays fixed — simple case
+    if (alt) {
+        const cx = b.x + b.width / 2
+        const cy = b.y + b.height / 2
+        return { x: cx - nw / 2, y: cy - nh / 2, width: nw, height: nh }
+    }
+
+    // for each handle: offset of the FIXED point from element center, in local space
+    const bw2 = b.width / 2
+    const bh2 = b.height / 2
+    const nw2 = nw / 2
+    const nh2 = nh / 2
+
+    const fixedOffset: Record<string, [number, number]> = {
+        se: [-bw2, -bh2], sw: [bw2, -bh2],
+        ne: [-bw2, bh2], nw: [bw2, bh2],
+        n: [0, bh2], s: [0, -bh2],
+        e: [-bw2, 0], w: [bw2, 0],
+    }
+
+    // same fixed point's offset in the NEW element
+    const newFixedOffset: Record<string, [number, number]> = {
+        se: [-nw2, -nh2], sw: [nw2, -nh2],
+        ne: [-nw2, nh2], nw: [nw2, nh2],
+        n: [0, nh2], s: [0, -nh2],
+        e: [-nw2, 0], w: [nw2, 0],
+    }
+
+    const [fx, fy] = fixedOffset[handle]
+    const [nfx, nfy] = newFixedOffset[handle]
+
+    // fixed point in world space (using original bounds and rotation)
+    const old_cx = b.x + bw2
+    const old_cy = b.y + bh2
+    const fixed_wx = old_cx + fx * cos - fy * sin
+    const fixed_wy = old_cy + fx * sin + fy * cos
+
+    // solve for new center: fixed_world = new_center + rotate(new_fixed_offset)
+    const new_cx = fixed_wx - nfx * cos + nfy * sin
+    const new_cy = fixed_wy - nfx * sin - nfy * cos
+
+    return { x: new_cx - nw2, y: new_cy - nh2, width: nw, height: nh }
 }
 
 export default function CanvasArea() {
@@ -99,6 +197,9 @@ export default function CanvasArea() {
     const activeHandleRef = useRef<HandleName | null>(null)
     const resizeStartMouseRef = useRef({ x: 0, y: 0 })
     const resizeStartBoundsRef = useRef({ x: 0, y: 0, width: 0, height: 0 })
+    const isRotatingRef = useRef(false)
+    const rotateStartAngleRef = useRef(0)
+    const rotateStartElementAngleRef = useRef(0)
 
     useEffect(() => {
         zoomRef.current = zoom
@@ -166,6 +267,15 @@ export default function CanvasArea() {
                     ctx.fillStyle = 'transparent'
                 }
 
+                // rotate around element center
+                const cx = element.position.x + element.size.width / 2
+                const cy = element.position.y + element.size.height / 2
+
+                ctx.save()
+                ctx.translate(cx, cy)
+                ctx.rotate(element.rotation)
+                ctx.translate(-cx, -cy)
+
                 if (element.type === 'rectangle') {
                     ctx.beginPath()
                     ctx.roundRect(
@@ -188,6 +298,7 @@ export default function CanvasArea() {
                     ctx.fill()
                 }
 
+                ctx.restore()
                 ctx.globalAlpha = 1
             }
         }
@@ -198,6 +309,14 @@ export default function CanvasArea() {
                 const element = layer.elements.find(e => e.id === selectedElementId)
                 if (element) {
                     const PADDING = 10
+                    const cx = element.position.x + element.size.width / 2
+                    const cy = element.position.y + element.size.height / 2
+
+                    ctx.save()
+                    ctx.translate(cx, cy)
+                    ctx.rotate(element.rotation)
+                    ctx.translate(-cx, -cy)
+
                     const handles = getHandles(element, PADDING)
                     const handleSize = 8 / zoom
 
@@ -226,6 +345,30 @@ export default function CanvasArea() {
                         ctx.stroke()
                     }
 
+                    // rotate handle
+                    const rotHandle = getRotateHandle(element, PADDING, zoom)
+                    const nHandle = handles.find(h => h.name === 'n')!
+                    const isRotHovered = hoveredHandle === 'rotate'
+                    const rotRadius = isRotHovered ? 6 / zoom : 5 / zoom
+
+                    // line from n handle to rotate handle
+                    ctx.strokeStyle = '#4a90d9'
+                    ctx.lineWidth = 1.5 / zoom
+                    ctx.beginPath()
+                    ctx.moveTo(nHandle.x, nHandle.y)
+                    ctx.lineTo(rotHandle.x, rotHandle.y)
+                    ctx.stroke()
+
+                    // circle
+                    ctx.beginPath()
+                    ctx.arc(rotHandle.x, rotHandle.y, rotRadius, 0, Math.PI * 2)
+                    ctx.fillStyle = isRotHovered ? '#4a90d9' : '#ffffff'
+                    ctx.fill()
+                    ctx.strokeStyle = '#4a90d9'
+                    ctx.lineWidth = 1.5 / zoom
+                    ctx.stroke()
+
+                    ctx.restore()
                     break
                 }
             }
@@ -279,13 +422,30 @@ export default function CanvasArea() {
                     for (const layer of layersRef.current) {
                         const element = layer.elements.find((el: Element) => el.id === selected)
                         if (element) {
+                            const local = toLocalSpace(worldX, worldY, element)
+                            // check rotate handle first
+                            const rotHandle = getRotateHandle(element, 10, zoomRef.current)
+                            const rotHitSize = 12 / zoomRef.current
+                            if (
+                                local.x >= rotHandle.x - rotHitSize / 2 &&
+                                local.x <= rotHandle.x + rotHitSize / 2 &&
+                                local.y >= rotHandle.y - rotHitSize / 2 &&
+                                local.y <= rotHandle.y + rotHitSize / 2
+                            ) {
+                                isRotatingRef.current = true
+                                const cx = element.position.x + element.size.width / 2
+                                const cy = element.position.y + element.size.height / 2
+                                rotateStartAngleRef.current = Math.atan2(worldY - cy, worldX - cx)
+                                rotateStartElementAngleRef.current = element.rotation
+                                return
+                            }
                             const handles = getHandles(element, 10)
                             for (const handle of handles) {
                                 if (
-                                    worldX >= handle.x - hitSize / 2 &&
-                                    worldX <= handle.x + hitSize / 2 &&
-                                    worldY >= handle.y - hitSize / 2 &&
-                                    worldY <= handle.y + hitSize / 2
+                                    local.x >= handle.x - hitSize / 2 &&
+                                    local.x <= handle.x + hitSize / 2 &&
+                                    local.y >= handle.y - hitSize / 2 &&
+                                    local.y <= handle.y + hitSize / 2
                                 ) {
                                     isResizingRef.current = true
                                     activeHandleRef.current = handle.name
@@ -329,17 +489,29 @@ export default function CanvasArea() {
                 for (const layer of layersRef.current) {
                     const element = layer.elements.find((e: Element) => e.id === selected)
                     if (element) {
+                        const local = toLocalSpace(worldX, worldY, element) //accounts for elements rotation
                         const handles = getHandles(element, 10)
                         for (const handle of handles) {
                             if (
-                                worldX >= handle.x - hitSize / 2 &&
-                                worldX <= handle.x + hitSize / 2 &&
-                                worldY >= handle.y - hitSize / 2 &&
-                                worldY <= handle.y + hitSize / 2
+                                local.x >= handle.x - hitSize / 2 &&
+                                local.x <= handle.x + hitSize / 2 &&
+                                local.y >= handle.y - hitSize / 2 &&
+                                local.y <= handle.y + hitSize / 2
                             ) {
                                 found = handle.name
                                 break
                             }
+                        }
+                        // check rotate handle
+                        const rotHandle = getRotateHandle(element, 10, zoomRef.current)
+                        const rotHitSize = 12 / zoomRef.current
+                        if (
+                            local.x >= rotHandle.x - rotHitSize / 2 &&
+                            local.x <= rotHandle.x + rotHitSize / 2 &&
+                            local.y >= rotHandle.y - rotHitSize / 2 &&
+                            local.y <= rotHandle.y + rotHitSize / 2
+                        ) {
+                            found = 'rotate'
                         }
                         break
                     }
@@ -391,38 +563,6 @@ export default function CanvasArea() {
 
                 const dx = worldX - resizeStartMouseRef.current.x
                 const dy = worldY - resizeStartMouseRef.current.y
-                const b = resizeStartBoundsRef.current
-                const alt = e.altKey
-                const MIN = 1
-
-                let x = b.x
-                let y = b.y
-                let w = b.width
-                let h = b.height
-
-                const handle = activeHandleRef.current
-
-                // horizontal
-                if (handle === 'e' || handle === 'ne' || handle === 'se') {
-                    w = Math.max(MIN, b.width + (alt ? dx * 2 : dx))
-                    if (alt) x = b.x - dx
-                }
-                if (handle === 'w' || handle === 'nw' || handle === 'sw') {
-                    const newW = Math.max(MIN, b.width - (alt ? dx * 2 : dx))
-                    x = alt ? b.x - (newW - b.width) / 2 : b.x + (b.width - newW)
-                    w = newW
-                }
-
-                // vertical
-                if (handle === 's' || handle === 'se' || handle === 'sw') {
-                    h = Math.max(MIN, b.height + (alt ? dy * 2 : dy))
-                    if (alt) y = b.y - dy
-                }
-                if (handle === 'n' || handle === 'ne' || handle === 'nw') {
-                    const newH = Math.max(MIN, b.height - (alt ? dy * 2 : dy))
-                    y = alt ? b.y - (newH - b.height) / 2 : b.y + (b.height - newH)
-                    h = newH
-                }
 
                 const selected = selectedElementIdRef.current
                 if (!selected) return
@@ -430,9 +570,40 @@ export default function CanvasArea() {
                 for (const layer of layersRef.current) {
                     const element = layer.elements.find((el: Element) => el.id === selected)
                     if (element) {
+                        const local = rotatePoint(dx, dy, element.rotation)
+                        const result = computeResize(
+                            activeHandleRef.current!,
+                            resizeStartBoundsRef.current,
+                            local,
+                            element.rotation,
+                            e.altKey
+                        )
                         updateElement(layer.id, selected, {
-                            position: { x, y },
-                            size: { width: w, height: h },
+                            position: { x: result.x, y: result.y },
+                            size: { width: result.width, height: result.height },
+                        })
+                        break
+                    }
+                }
+            }
+            if (isRotatingRef.current) {
+                didDragRef.current = true
+                const rect = canvas.getBoundingClientRect()
+                const worldX = (e.clientX - rect.left - panRef.current.x) / zoomRef.current
+                const worldY = (e.clientY - rect.top - panRef.current.y) / zoomRef.current
+
+                const selected = selectedElementIdRef.current
+                if (!selected) return
+
+                for (const layer of layersRef.current) {
+                    const element = layer.elements.find((el: Element) => el.id === selected)
+                    if (element) {
+                        const cx = element.position.x + element.size.width / 2
+                        const cy = element.position.y + element.size.height / 2
+                        const angle = Math.atan2(worldY - cy, worldX - cx)
+                        const delta = angle - rotateStartAngleRef.current
+                        updateElement(layer.id, selected, {
+                            rotation: rotateStartElementAngleRef.current + delta
                         })
                         break
                     }
@@ -445,6 +616,7 @@ export default function CanvasArea() {
             if (e.button === 0) {
                 isDraggingRef.current = false
                 isResizingRef.current = false
+                isRotatingRef.current = false
                 activeHandleRef.current = null
             }
         }
