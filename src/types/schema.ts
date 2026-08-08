@@ -72,7 +72,7 @@ interface ElementStyle {
 // ============================================================
 
 // Every element shares these base properties
-interface BaseElement {
+export interface BaseElement {
     id: ID
     position: Vector2
     size: Size

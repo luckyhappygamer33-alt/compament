@@ -1,7 +1,8 @@
 import { useRef, useEffect, useState } from 'react'
-import { useEditorStore } from '../store/editorStore'
+import { useEditorStore, uid } from '../store/editorStore'
 import Breadcrumb from './Breadcrumb'
 import './CanvasArea.css'
+import { type BaseElement } from '../types/schema'
 
 export default function CanvasArea() {
     const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -27,11 +28,27 @@ export default function CanvasArea() {
 
     const layers = useEditorStore(state => state.layers)
 
+    const setSelectedElement = useEditorStore(state => state.setSelectedElement)
+    const selectedElementId = useEditorStore(state => state.selectedElementId)
+    const selectedElementIdRef = useRef(selectedElementId)
+    const layersRef = useRef(layers)
+
+    function hitTest(element: BaseElement, x: number, y: number): boolean {
+        return (
+            x >= element.position.x &&
+            x <= element.position.x + element.size.width &&
+            y >= element.position.y &&
+            y <= element.position.y + element.size.height
+        )
+    }
+
     useEffect(() => {
         zoomRef.current = zoom
         panRef.current = pan
         activeToolRef.current = activeTool
         activeLayerIdRef.current = activeLayerId
+        layersRef.current = layers
+        selectedElementIdRef.current = selectedElementId
     })
 
     // when a project is created, fit the artboard to screen
@@ -116,8 +133,26 @@ export default function CanvasArea() {
             }
         }
 
+        // draw selection outline
+        if (selectedElementId) {
+            for (const layer of layers) {
+                const element = layer.elements.find(e => e.id === selectedElementId)
+                if (element) {
+                    ctx.strokeStyle = '#4a90d9'
+                    ctx.lineWidth = 2 / zoom  // stays 2px regardless of zoom level
+                    ctx.strokeRect(
+                        element.position.x - 10,
+                        element.position.y - 10,
+                        element.size.width + 20,
+                        element.size.height + 20
+                    )
+                    break
+                }
+            }
+        }
+
         ctx.restore()
-    }, [artboardSize, zoom, pan, layers])
+    }, [artboardSize, zoom, pan, layers, selectedElementId])
 
     // event listeners — registered once, use refs for current values
     useEffect(() => {
@@ -171,11 +206,38 @@ export default function CanvasArea() {
         window.addEventListener('mouseup', handleMouseUp)
 
         const handleClick = (e: MouseEvent) => {
-            // Built-in browser function — generates a unique string ID every call
-            const uid = () => crypto.randomUUID()
-
             const tool = activeToolRef.current
-            if (tool === 'select') return
+            if (tool === 'select') {
+                const worldX = (e.offsetX - panRef.current.x) / zoomRef.current
+                const worldY = (e.offsetY - panRef.current.y) / zoomRef.current
+
+                // collect all hits across all visible unlocked layers
+                const hits: string[] = []
+                for (const layer of layersRef.current) {
+                    if (!layer.visible || layer.locked) continue
+                    for (let i = layer.elements.length - 1; i >= 0; i--) {
+                        if (hitTest(layer.elements[i], worldX, worldY)) {
+                            hits.push(layer.elements[i].id)
+                        }
+                    }
+                }
+
+                if (hits.length === 0) {
+                    setSelectedElement(null)
+                    return
+                }
+
+                if (hits.length === 1) {
+                    setSelectedElement(hits[0])
+                    return
+                }
+
+                // multiple hits — cycle from current selection
+                const currentIndex = hits.indexOf(selectedElementIdRef.current ?? '')
+                const nextIndex = (currentIndex + 1) % hits.length
+                setSelectedElement(hits[nextIndex])
+                return
+            }
 
             const layerId = activeLayerIdRef.current
             if (!layerId) return
