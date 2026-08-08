@@ -16,10 +16,22 @@ export default function CanvasArea() {
 
     const isPanningRef = useRef(false)
     const lastMouseRef = useRef({ x: 0, y: 0 })
+    ///-----///
+
+    const activeTool = useEditorStore(state => state.activeTool)
+    const activeLayerId = useEditorStore(state => state.activeLayerId)
+    const addElement = useEditorStore(state => state.addElement)
+
+    const activeToolRef = useRef(activeTool)
+    const activeLayerIdRef = useRef(activeLayerId)
+
+    const layers = useEditorStore(state => state.layers)
 
     useEffect(() => {
         zoomRef.current = zoom
         panRef.current = pan
+        activeToolRef.current = activeTool
+        activeLayerIdRef.current = activeLayerId
     })
 
     // when a project is created, fit the artboard to screen
@@ -65,8 +77,47 @@ export default function CanvasArea() {
         ctx.shadowColor = 'transparent'
         ctx.shadowBlur = 0
 
+        //drawing the elements
+        for (const layer of layers) {
+            if (!layer.visible) continue
+            for (const element of layer.elements) {
+                ctx.globalAlpha = element.style.opacity
+
+                if (element.style.fill?.type === 'solid') {
+                    const { r, g, b, a } = element.style.fill.color
+                    ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${a})`
+                } else {
+                    ctx.fillStyle = 'transparent'
+                }
+
+                if (element.type === 'rectangle') {
+                    ctx.beginPath()
+                    ctx.roundRect(
+                        element.position.x,
+                        element.position.y,
+                        element.size.width,
+                        element.size.height,
+                        element.cornerRadius
+                    )
+                    ctx.fill()
+                } else if (element.type === 'ellipse') {
+                    ctx.beginPath()
+                    ctx.ellipse(
+                        element.position.x + element.size.width / 2,
+                        element.position.y + element.size.height / 2,
+                        element.size.width / 2,
+                        element.size.height / 2,
+                        0, 0, Math.PI * 2
+                    )
+                    ctx.fill()
+                }
+
+                ctx.globalAlpha = 1
+            }
+        }
+
         ctx.restore()
-    }, [artboardSize, zoom, pan])
+    }, [artboardSize, zoom, pan, layers])
 
     // event listeners — registered once, use refs for current values
     useEffect(() => {
@@ -119,11 +170,47 @@ export default function CanvasArea() {
         window.addEventListener('mousemove', handleMouseMove)
         window.addEventListener('mouseup', handleMouseUp)
 
+        const handleClick = (e: MouseEvent) => {
+            // Built-in browser function — generates a unique string ID every call
+            const uid = () => crypto.randomUUID()
+
+            const tool = activeToolRef.current
+            if (tool === 'select') return
+
+            const layerId = activeLayerIdRef.current
+            if (!layerId) return
+
+            // convert screen coordinates to world coordinates
+            const worldX = (e.offsetX - panRef.current.x) / zoomRef.current
+            const worldY = (e.offsetY - panRef.current.y) / zoomRef.current
+
+            const size = 100
+            const base = {
+                id: uid(),
+                position: { x: worldX - size / 2, y: worldY - size / 2 },
+                size: { width: size, height: size },
+                rotation: 0,
+                style: {
+                    opacity: 1,
+                    fill: { type: 'solid' as const, color: { r: 74, g: 144, b: 217, a: 1 } }
+                }
+            }
+
+            const element = tool === 'rectangle'
+                ? { ...base, type: 'rectangle' as const, cornerRadius: 0 }
+                : { ...base, type: 'ellipse' as const }
+
+            addElement(layerId, element)
+        }
+
+        canvas.addEventListener('click', handleClick)
+
         return () => {
             canvas.removeEventListener('wheel', handleWheel)
             canvas.removeEventListener('mousedown', handleMouseDown)
             window.removeEventListener('mousemove', handleMouseMove)
             window.removeEventListener('mouseup', handleMouseUp)
+            canvas.removeEventListener('click', handleClick)
         }
 
     }, [])

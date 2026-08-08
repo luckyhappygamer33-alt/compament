@@ -27,6 +27,8 @@ const makeRootLayer = (): Layer => ({
     elements: [],
 })
 
+type Tool = 'select' | 'rectangle' | 'ellipse'
+
 // ----------------------------------------------------------------
 // Store shape — state + actions defined together in one interface
 // ----------------------------------------------------------------
@@ -46,6 +48,8 @@ interface EditorStore {
     // ID of the currently selected element on the canvas (null = nothing selected)
     selectedElementId: string | null
 
+    activeTool: Tool
+
     // ---- ACTIONS ----
 
     // Project
@@ -60,6 +64,8 @@ interface EditorStore {
     renameLayer: (id: string, name: string) => void
     toggleLayerVisibility: (id: string) => void
     toggleLayerLock: (id: string) => void
+
+    setActiveTool: (tool: Tool) => void
 
     // Elements
     addElement: (layerId: string, element: Element) => void
@@ -81,6 +87,7 @@ export const useEditorStore = create<EditorStore>()((set, get) => ({
     layers: [],
     activeLayerId: null,
     selectedElementId: null,
+    activeTool: 'select',
 
     // ---- ACTIONS ----
 
@@ -94,6 +101,7 @@ export const useEditorStore = create<EditorStore>()((set, get) => ({
             layers: [firstLayer, rootLayer],
             activeLayerId: firstLayer.id,
             selectedElementId: null,
+            activeTool: 'select'
         })
     },
 
@@ -186,6 +194,8 @@ export const useEditorStore = create<EditorStore>()((set, get) => ({
                 l.id === id ? { ...l, locked: !l.locked } : l
             ),
         })),
+
+    setActiveTool: (tool) => set({ activeTool: tool }),
 
     // Add an element to a specific layer
     addElement: (layerId, element) =>
