@@ -10,24 +10,24 @@ const normalizeDegrees = (degrees: number) => {
     return ((degrees % 360) + 360) % 360
 }
 
-
-function hitTest(element: BaseElement, x: number, y: number): boolean {
+function hitTest(element: BaseElement, x: number, y: number, padding = 0): boolean {
     const cx = element.position.x + element.size.width / 2
     const cy = element.position.y + element.size.height / 2
-    const cos = Math.cos(-element.rotation)
-    const sin = Math.sin(-element.rotation)
+    const cos = Math.cos(-degToRad(element.rotation))
+    const sin = Math.sin(-degToRad(element.rotation))
     const dx = x - cx
     const dy = y - cy
     const localX = cx + dx * cos - dy * sin
     const localY = cy + dx * sin + dy * cos
 
     return (
-        localX >= element.position.x &&
-        localX <= element.position.x + element.size.width &&
-        localY >= element.position.y &&
-        localY <= element.position.y + element.size.height
+        localX >= element.position.x - padding &&
+        localX <= element.position.x + element.size.width + padding &&
+        localY >= element.position.y - padding &&
+        localY <= element.position.y + element.size.height + padding
     )
 }
+
 type HandleName = 'n' | 's' | 'e' | 'w' | 'nw' | 'ne' | 'sw' | 'se' | 'rotate'
 
 interface Handle {
