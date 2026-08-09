@@ -4,6 +4,7 @@
     gap: 2px;
     padding: 0 12px;
     height: 100%;
+    background: var(--color-bg-breadcrumb)
 }
 
 .breadcrumb-item {

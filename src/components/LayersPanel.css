@@ -1,8 +1,12 @@
+/* tokens.css is imported once globally in main.tsx — no import needed here */
+
+/* ── Panel shell ──────────────────────────────────────────── */
+
 .layers-panel {
     display: flex;
     flex-direction: column;
     border-bottom: 1px solid var(--color-border);
-    /* takes only the space it needs — rest of sidebar is free for component library */
+    background-color: var(--color-bg-panel);
 }
 
 .layers-panel .panel-header {
@@ -38,23 +42,26 @@
 
 .add-layer-btn:hover {
     background: var(--color-hover);
-    color: var(--color-text);
+    color: var(--color-accent);
 }
+
+/* ── Layers list ──────────────────────────────────────────── */
 
 .layers-list {
     display: flex;
     flex-direction: column;
 }
 
+/* ── Layer row ────────────────────────────────────────────── */
+
 .layer-row {
-    height: 30px;
-    padding: 0 10px;
+    padding: 6px 8px;
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     cursor: pointer;
-    transition: background 0.1s;
     border-bottom: 1px solid var(--color-border-light);
+    transition: background 0.1s;
 }
 
 .layer-row:hover {
@@ -62,29 +69,68 @@
 }
 
 .layer-row.active {
-    background: rgba(74, 144, 217, 0.15);
+    background: var(--color-accent-bg);
+    border-bottom-color: var(--color-accent-ring);
 }
 
 .layer-row.root-row {
-    background: rgba(201, 146, 58, 0.08);
+    background: var(--color-accent-2-bg);
 }
 
 .layer-row.root-row:hover {
-    background: rgba(201, 146, 58, 0.15);
+    background: rgba(65, 64, 102, 0.38);
 }
 
-.layer-icon {
-    font-size: 10px;
-    color: var(--color-text-dim);
+.layer-row.root-row.active {
+    background: var(--color-accent-2-bg);
+    border-bottom-color: var(--color-accent-2-ring);
+}
+
+.layer-row.root-row.active .layer-preview {
+    border-color: var(--color-accent-2-ring);
+}
+
+/* ── Thumbnail preview ────────────────────────────────────── */
+
+.layer-preview {
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+    border-radius: 4px;
+    border: 1px solid var(--color-border);
+    background-color: var(--color-bg);
+    /* checkerboard — signals transparent content */
+    background-image:
+        linear-gradient(45deg, var(--color-border-light) 25%, transparent 25%),
+        linear-gradient(-45deg, var(--color-border-light) 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, var(--color-border-light) 75%),
+        linear-gradient(-45deg, transparent 75%, var(--color-border-light) 75%);
+    background-size: 8px 8px;
+    background-position: 0 0, 0 4px, 4px -4px, -4px 0;
+}
+
+.layer-row.active .layer-preview {
+    border-color: var(--color-accent-ring);
+}
+
+/* ── Layer info — two-row stack ───────────────────────────── */
+
+.layer-info {
+    flex: 1;
+    min-width: 0;
+    /* allow text truncation inside flex child */
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
 }
 
 .layer-name {
-    flex: 1;
     font-size: 12px;
     color: var(--color-text);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    line-height: 1;
 }
 
 .root-badge {
@@ -93,7 +139,47 @@
     color: var(--color-root-badge);
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    background: rgba(201, 146, 58, 0.15);
-    padding: 1px 5px;
+    background: var(--color-accent-2-bg);
+    padding: 2px 5px;
     border-radius: 3px;
+    align-self: flex-start;
+}
+
+/* ── Button group ─────────────────────────────────────────── */
+
+.layer-btn-group {
+    display: flex;
+}
+
+.layer-btn-group button {
+    width: 25px;
+    height: 25px;
+    border: 0.5px solid var(--color-border);
+    border-right: none;
+    border-radius: 0;
+    background: var(--color-bg-inset);
+    color: var(--color-text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.1s;
+    flex-shrink: 0;
+}
+
+.layer-btn-group button:first-child {
+    border-radius: 3px 0 0 3px;
+}
+
+.layer-btn-group button:last-child {
+    border-radius: 0 3px 3px 0;
+    border-right: 0.5px solid var(--color-border);
+}
+
+.layer-btn-group button:hover {
+    color: var(--color-text);
+}
+
+.layer-btn-group button.btn-delete:hover {
+    color: #d46b6b;
 }
