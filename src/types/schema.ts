@@ -124,7 +124,7 @@ export type Element =
 // LAYER — the structural slot that holds elements
 // ============================================================
 
-interface Layer {
+export interface Layer {
     id: ID
     name: string
     visible: boolean
