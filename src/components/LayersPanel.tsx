@@ -9,6 +9,8 @@ export default function LayersPanel() {
     const deleteLayer = useEditorStore(state => state.deleteLayer)
     const setActiveLayer = useEditorStore(state => state.setActiveLayer)
     const mergerLayer = useEditorStore(state => state.mergeLayer)
+    const toggleLayerVisibility = useEditorStore(state => state.toggleLayerVisibility)
+    const toggleLayerLock = useEditorStore(state => state.toggleLayerLock)
 
     return (
         <div className="layers-panel">
@@ -32,6 +34,12 @@ export default function LayersPanel() {
                                 <button onClick={e => { moveLayer(layer.id, 'up'); e.stopPropagation() }}>↑</button>
                                 <button onClick={e => { moveLayer(layer.id, 'down'); e.stopPropagation() }}>↓</button>
                                 <button onClick={e => { mergerLayer(layer.id); e.stopPropagation() }}>V</button>
+                                <button onClick={e => { toggleLayerVisibility(layer.id); e.stopPropagation() }}>
+                                    {layer.visible ? '👁' : '👁‍🗨'}
+                                </button>
+                                <button onClick={e => { toggleLayerLock(layer.id); e.stopPropagation() }}>
+                                    {layer.locked ? '🔒' : '🔓'}
+                                </button>
                                 <button onClick={e => { deleteLayer(layer.id); e.stopPropagation() }}>X</button>
                             </>
                         )}

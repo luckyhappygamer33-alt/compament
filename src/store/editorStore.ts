@@ -150,7 +150,7 @@ export const useEditorStore = create<EditorStore>()((set, get) => ({
     },
 
     mergeLayer: (id) => {
-        const { layers, activeLayerId } = get()  // one call, everything you need
+        const { layers, activeLayerId } = get()  // one call, gets everything you need
         const target = layers.find(l => l.id === id)
         if (!target || target.isRoot) return
 
@@ -163,7 +163,8 @@ export const useEditorStore = create<EditorStore>()((set, get) => ({
 
         const newActiveId = id === activeLayerId ? destinationLayer.id : activeLayerId
 
-        // TODO: merge elements from source layer into destinationLayer here
+        destinationLayer.elements = [...destinationLayer.elements, ...newLayers[layerIndex].elements]
+        newLayers[layerIndex + 1] = destinationLayer
 
         newLayers.splice(layerIndex, 1)
 
@@ -188,12 +189,21 @@ export const useEditorStore = create<EditorStore>()((set, get) => ({
         })),
 
     // Toggle a layer's locked state (lock icon)
-    toggleLayerLock: (id) =>
-        set(state => ({
-            layers: state.layers.map(l =>
-                l.id === id ? { ...l, locked: !l.locked } : l
-            ),
-        })),
+    toggleLayerLock: (id) => {
+        set(state => {
+            const layer = state.layers.find(l => l.id === id)
+            const gettingLocked = layer && !layer.locked
+            return {
+                layers: state.layers.map(l =>
+                    l.id === id ? { ...l, locked: !l.locked } : l
+                ),
+                // deselect if the layer being locked contains the selected element
+                selectedElementId: gettingLocked
+                    ? null
+                    : state.selectedElementId
+            }
+        })
+    },
 
     setActiveTool: (tool) => set({ activeTool: tool }),
 

@@ -275,7 +275,7 @@ export default function CanvasArea() {
         ctx.shadowBlur = 0
 
         //drawing the elements
-        for (const layer of layers) {
+        for (const layer of [...layers].reverse()) {
             if (!layer.visible) continue
             for (const element of layer.elements) {
                 ctx.globalAlpha = element.style.opacity
@@ -440,6 +440,7 @@ export default function CanvasArea() {
                 if (selected) {
                     const hitSize = 10 / zoomRef.current
                     for (const layer of layersRef.current) {
+                        if (layer.locked) continue
                         const element = layer.elements.find((el: Element) => el.id === selected)
                         if (element) {
                             const local = toLocalSpace(worldX, worldY, element)
@@ -489,6 +490,7 @@ export default function CanvasArea() {
 
                 // find the element
                 for (const layer of layersRef.current) {
+                    if (layer.locked) continue
                     const element = layer.elements.find(e => e.id === selected)
                     if (element && hitTest(element, worldX, worldY)) {
                         isDraggingRef.current = true
