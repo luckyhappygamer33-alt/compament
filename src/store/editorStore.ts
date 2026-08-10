@@ -181,12 +181,21 @@ export const useEditorStore = create<EditorStore>()((set, get) => ({
         })),
 
     // Toggle a layer's visibility (eye icon)
-    toggleLayerVisibility: (id) =>
-        set(state => ({
-            layers: state.layers.map(l =>
-                l.id === id ? { ...l, visible: !l.visible } : l
-            ),
-        })),
+    toggleLayerVisibility: (id) => {
+        set(state => {
+            const layer = state.layers.find(l => l.id === id)
+            const gettingInvisible = layer && layer.visible
+            return {
+                layers: state.layers.map(l =>
+                    l.id === id ? { ...l, visible: !l.visible } : l
+                ),
+                // deselect if the layer being locked contains the selected element
+                selectedElementId: gettingInvisible
+                    ? null
+                    : state.selectedElementId
+            }
+        })
+    },
 
     // Toggle a layer's locked state (lock icon)
     toggleLayerLock: (id) => {
