@@ -175,10 +175,11 @@ function computeResize(
 export default function CanvasArea() {
     const canvasRef = useRef<HTMLCanvasElement>(null)
     const artboardSize = useEditorStore(state => state.artboardSize)
+    const artboardSizeRef = useRef(artboardSize)
 
     const [zoom, setZoom] = useState(1)
     const [pan, setPan] = useState({ x: 0, y: 0 })
-    const [initZoom, setInitZoom] = useState(1)
+    const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 })
 
     const zoomRef = useRef(zoom)
     const panRef = useRef(pan)
@@ -221,6 +222,13 @@ export default function CanvasArea() {
     const rotateStartAngleRef = useRef(0)
     const rotateStartElementAngleRef = useRef(0)
 
+    const fitZoom = artboardSize && canvasSize.width > 0 && canvasSize.height > 0
+        ? Math.min(
+            (canvasSize.width - 80) / artboardSize.width,
+            (canvasSize.height - 80) / artboardSize.height
+        )
+        : 1
+
     //sync refs every render so event handlers always read current values
     useEffect(() => {
         zoomRef.current = zoom
@@ -230,6 +238,7 @@ export default function CanvasArea() {
         layersRef.current = layers
         selectedElementIdRef.current = selectedElementId
         hoveredHandleRef.current = hoveredHandle
+        artboardSizeRef.current = artboardSize
     })
 
     //fit artboard to viewport on project init
@@ -239,6 +248,7 @@ export default function CanvasArea() {
 
         canvas.width = canvas.offsetWidth
         canvas.height = canvas.offsetHeight
+        setCanvasSize({ width: canvas.offsetWidth, height: canvas.offsetHeight })
 
         const padding = 40
         const scaleX = (canvas.width - padding * 2) / artboardSize.width
@@ -246,7 +256,6 @@ export default function CanvasArea() {
         const initialZoom = Math.min(scaleX, scaleY)
 
         setZoom(initialZoom)
-        setInitZoom(initialZoom)
         setPan({
             x: (canvas.width - artboardSize.width * initialZoom) / 2,
             y: (canvas.height - artboardSize.height * initialZoom) / 2,
@@ -396,9 +405,9 @@ export default function CanvasArea() {
         }
     }
 
-    //draw canvas and canvas elements
-    useEffect(() => {
+    const drawFrame = useCallback(() => {
         const canvas = canvasRef.current
+        const artboardSize = artboardSizeRef.current
         if (!canvas || !artboardSize) return
 
         const ctx = canvas.getContext('2d')
@@ -408,11 +417,11 @@ export default function CanvasArea() {
         ctx.resetTransform()
 
         ctx.save()
-        ctx.translate(pan.x, pan.y)
-        ctx.scale(zoom, zoom)
+        ctx.translate(panRef.current.x, panRef.current.y)
+        ctx.scale(zoomRef.current, zoomRef.current)
 
         ctx.shadowColor = 'rgba(0, 0, 0, 0.4)'
-        ctx.shadowBlur = 20 / zoom
+        ctx.shadowBlur = 20 / zoomRef.current
 
         ctx.fillStyle = '#ffffff'
         ctx.fillRect(0, 0, artboardSize.width, artboardSize.height)
@@ -420,11 +429,35 @@ export default function CanvasArea() {
         ctx.shadowColor = 'transparent'
         ctx.shadowBlur = 0
 
-        drawElements(ctx, layers)
-        drawSelectionBox(ctx, selectedElementId, layers, zoom, hoveredHandle)
+        drawElements(ctx, layersRef.current)
+        drawSelectionBox(ctx, selectedElementIdRef.current, layersRef.current, zoomRef.current, hoveredHandleRef.current)
 
         ctx.restore()
+    }, [])
+
+    //draw canvas and canvas elements
+    useEffect(() => {
+        drawFrame()
     }, [artboardSize, zoom, pan, layers, selectedElementId, hoveredHandle])
+
+    useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+
+        const ro = new ResizeObserver(() => {
+            const w = Math.round(canvas.offsetWidth);
+            const h = Math.round(canvas.offsetHeight);
+            if (w !== canvas.width || h !== canvas.height) {
+                canvas.width = w;   // ← updates buffer resolution
+                canvas.height = h;
+                setCanvasSize({ width: w, height: h })
+                drawFrame()
+            }
+        });
+
+        ro.observe(canvas);
+        return () => ro.disconnect();
+    }, []);
 
     const handleWheel = useCallback((e: WheelEvent) => {
         e.preventDefault()
@@ -756,14 +789,14 @@ export default function CanvasArea() {
         if (!canvas || !artboardSize) return
 
         const padding = 40
-        const scaleX = (canvas.width - padding * 2) / artboardSize.width
-        const scaleY = (canvas.height - padding * 2) / artboardSize.height
-        const fitZoom = Math.min(scaleX, scaleY)
-
-        setZoom(fitZoom)
+        const fit = Math.min(
+            (canvas.width - padding * 2) / artboardSize.width,
+            (canvas.height - padding * 2) / artboardSize.height
+        )
+        setZoom(fit)
         setPan({
-            x: (canvas.width - artboardSize.width * fitZoom) / 2,
-            y: (canvas.height - artboardSize.height * fitZoom) / 2,
+            x: (canvas.width - artboardSize.width * fit) / 2,
+            y: (canvas.height - artboardSize.height * fit) / 2,
         })
     }
 
@@ -776,7 +809,7 @@ export default function CanvasArea() {
                 <canvas ref={canvasRef} className="editor-canvas" />
                 {artboardSize && (
                     <div className="zoom-indicator" onClick={handleResetZoom}>
-                        {Math.round((zoom / initZoom) * 100)}%
+                        {Math.round((zoom / fitZoom) * 100)}%
                     </div>
                 )}
             </div>
