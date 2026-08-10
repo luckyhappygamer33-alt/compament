@@ -185,12 +185,13 @@ export const useEditorStore = create<EditorStore>()((set, get) => ({
         set(state => {
             const layer = state.layers.find(l => l.id === id)
             const gettingInvisible = layer && layer.visible
+            const layerContainsSelected = layer?.elements.some(e => e.id === state.selectedElementId)
             return {
                 layers: state.layers.map(l =>
                     l.id === id ? { ...l, visible: !l.visible } : l
                 ),
-                // deselect if the layer being locked contains the selected element
-                selectedElementId: gettingInvisible
+                // deselect if the layer being hidden contains the selected element
+                selectedElementId: gettingInvisible && layerContainsSelected
                     ? null
                     : state.selectedElementId
             }
@@ -202,12 +203,13 @@ export const useEditorStore = create<EditorStore>()((set, get) => ({
         set(state => {
             const layer = state.layers.find(l => l.id === id)
             const gettingLocked = layer && !layer.locked
+            const layerContainsSelected = layer?.elements.some(e => e.id === state.selectedElementId)
             return {
                 layers: state.layers.map(l =>
                     l.id === id ? { ...l, locked: !l.locked } : l
                 ),
                 // deselect if the layer being locked contains the selected element
-                selectedElementId: gettingLocked
+                selectedElementId: gettingLocked && layerContainsSelected
                     ? null
                     : state.selectedElementId
             }
