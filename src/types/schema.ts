@@ -21,7 +21,7 @@ interface Vector2 {
     y: number
 }
 
-interface Size {
+export interface Size {
     width: number
     height: number
 }

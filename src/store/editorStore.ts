@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Layer, Element, RootObject, Size } from '../types/schema'
+import type { Layer, Element, Size } from '../types/schema'
 
 // ----------------------------------------------------------------
 // Helpers
@@ -225,7 +225,7 @@ export const useEditorStore = create<EditorStore>()((set, get) => ({
                     ? {
                         ...l,
                         elements: l.elements.map(e =>
-                            e.id === elementId ? { ...e, ...changes } : e
+                            e.id === elementId ? { ...e, ...changes } as Element : e
                         ),
                     }
                     : l

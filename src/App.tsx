@@ -3,7 +3,7 @@ import './tokens.css'
 import { useEditorStore } from './store/editorStore'
 import Toolbar from './components/Toolbar'
 import PropertiesPanel from './components/PropertiesPanel'
-import CanvasArea from './components/CanvasArea'
+import CanvasArea from './components/CanvasArea/CanvasArea'
 import LayersPanel from './components/LayersPanel'
 import NewProjectModal from './components/NewProjectModal'
 
