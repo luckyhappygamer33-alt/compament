@@ -368,7 +368,7 @@ export class InputHandler {
         if (found !== this.hoveredHandle) {
             this.hoveredHandle = found
             canvas.style.cursor = found ? HANDLE_CURSORS[found] : 'default'
-            this.refs.rendererRef.current?.drawFrame()
+            this.refs.rendererRef.current?.requestFrame()
         }
     }
 
@@ -407,6 +407,6 @@ export class InputHandler {
         this.lastBrushPos = { x: worldX, y: worldY }
 
         // trigger redraw — buffer changed, renderer needs to composite again
-        this.refs.rendererRef.current?.drawFrame()
+        this.refs.rendererRef.current?.requestFrame()
     }
 }

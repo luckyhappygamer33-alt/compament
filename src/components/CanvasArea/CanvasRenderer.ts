@@ -19,6 +19,8 @@ export class CanvasRenderer {
     private refs: RendererRefs
     private ctx: CanvasRenderingContext2D
 
+    private rafId: number | null = null
+
     constructor(
         canvas: HTMLCanvasElement,
         refs: RendererRefs
@@ -178,7 +180,15 @@ export class CanvasRenderer {
         }
     }
 
-    drawFrame() {
+    requestFrame() {
+        if (this.rafId !== null) return  // already scheduled
+        this.rafId = requestAnimationFrame(() => {
+            this.rafId = null
+            this.drawFrame()  // rename actual draw logic to renderFrame
+        })
+    }
+
+    private drawFrame() {
         const { panRef, zoomRef, artboardSizeRef, layersRef,
             selectedElementIdRef, hoveredHandleRef } = this.refs
         const artboardSize = artboardSizeRef.current

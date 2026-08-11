@@ -116,7 +116,7 @@ export default function CanvasArea() {
 
     //draw canvas and canvas elements
     useEffect(() => {
-        rendererRef.current?.drawFrame() //if current is null, skip the call entirely
+        rendererRef.current?.requestFrame() //if current is null, skip the call entirely
     }, [artboardSize, zoom, pan, layers, selectedElementId])
 
     useEffect(() => {
@@ -130,7 +130,7 @@ export default function CanvasArea() {
                 canvas.width = w;   // ← updates buffer resolution
                 canvas.height = h;
                 setCanvasSize({ width: w, height: h })
-                rendererRef.current?.drawFrame()
+                rendererRef.current?.requestFrame()
             }
         });
 
