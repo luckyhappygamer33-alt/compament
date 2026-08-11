@@ -1,5 +1,4 @@
 import './App.css'
-import './tokens.css'
 import { useEditorStore } from './store/editorStore'
 import Toolbar from './components/Toolbar'
 import PropertiesPanel from './components/PropertiesPanel'
