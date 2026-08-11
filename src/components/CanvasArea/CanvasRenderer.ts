@@ -3,6 +3,7 @@ import type { RefObject } from 'react'
 import type { Layer, Size, BaseElement } from '../../types/schema'
 import type { HandleName, Handle } from './CanvasTypes'
 import { degToRad, getHandlePositions, getRotateHandlePosition } from './CanvasHelpers'
+import { getBuffer } from './BufferRegistry'
 
 interface RendererRefs {
     panRef: RefObject<{ x: number; y: number }>
@@ -25,7 +26,7 @@ export class CanvasRenderer {
         this.canvas = canvas
         this.refs = refs
         const ctx = canvas.getContext('2d')
-        if (!ctx) throw new Error('Canvas 2D context not available')
+        if (!ctx) throw new Error('Canvas 2D context (HTML canvas) not available')
         this.ctx = ctx
     }
 
@@ -35,6 +36,10 @@ export class CanvasRenderer {
     ) {
         for (const layer of [...layers].reverse()) {
             if (!layer.visible) continue
+
+            const buffer = getBuffer(layer.id)
+            if (buffer) ctx.drawImage(buffer, 0, 0)
+
             for (const element of layer.elements) {
                 ctx.globalAlpha = element.style.opacity
 

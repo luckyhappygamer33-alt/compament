@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { Layer, Element, Size } from '../types/schema'
+import { createBuffer, deleteBuffer, mergeBuffer } from '../components/CanvasArea/BufferRegistry'
 
 // ----------------------------------------------------------------
 // Helpers
@@ -27,7 +28,7 @@ const makeRootLayer = (): Layer => ({
     elements: [],
 })
 
-type Tool = 'select' | 'rectangle' | 'ellipse'
+type Tool = 'select' | 'rectangle' | 'ellipse' | 'brush'
 
 // ----------------------------------------------------------------
 // Store shape — state + actions defined together in one interface
@@ -96,6 +97,10 @@ export const useEditorStore = create<EditorStore>()((set, get) => ({
     initProject: (width, height) => {
         const rootLayer = makeRootLayer()
         const firstLayer = makeLayer('Layer 1')
+
+        createBuffer(rootLayer.id, width, height)
+        createBuffer(firstLayer.id, width, height)
+
         set({
             artboardSize: { width, height },
             layers: [firstLayer, rootLayer],
@@ -108,7 +113,10 @@ export const useEditorStore = create<EditorStore>()((set, get) => ({
     // Add a new layer above the current stack.
     // Automatically becomes the active layer.
     addLayer: () => {
+        const { artboardSize } = get()
+        if (!artboardSize) return
         const newLayer = makeLayer(`Layer ${get().layers.length + 1}`)
+        createBuffer(newLayer.id, artboardSize.width, artboardSize.height)
         set(state => ({
             layers: [newLayer, ...state.layers],
             activeLayerId: newLayer.id,
@@ -142,6 +150,8 @@ export const useEditorStore = create<EditorStore>()((set, get) => ({
 
         if (!target || target.isRoot) return   // only rule: can't delete root
 
+        deleteBuffer(id)
+
         const remaining = layers.filter(l => l.id !== id)
         set({
             layers: remaining,
@@ -163,10 +173,15 @@ export const useEditorStore = create<EditorStore>()((set, get) => ({
 
         const newActiveId = id === activeLayerId ? destinationLayer.id : activeLayerId
 
+        // merge pixel buffers — stamp source pixels onto destination
+        mergeBuffer(id, destinationLayer.id)
+
         destinationLayer.elements = [...destinationLayer.elements, ...newLayers[layerIndex].elements]
         newLayers[layerIndex + 1] = destinationLayer
 
         newLayers.splice(layerIndex, 1)
+
+        deleteBuffer(id)
 
         set({ layers: newLayers, activeLayerId: newActiveId })
     },

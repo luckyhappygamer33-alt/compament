@@ -1,9 +1,4 @@
 // ============================================================
-// GRAPHIC EDITOR — MVP DATA SCHEMA
-// ============================================================
-
-
-// ============================================================
 // PRIMITIVES — building blocks used throughout
 // ============================================================
 
@@ -25,7 +20,6 @@ export interface Size {
     width: number
     height: number
 }
-
 
 // ============================================================
 // STYLE — properties that can be applied to any element
@@ -143,7 +137,6 @@ interface Editor {
     id: ID
     artboardSize: Size       // defines canvas dimensions at top level
     layers: Layer[]          // always length >= 1, enforced at data level
-    rootObject: RootObject   // always present, always at the bottom
     isExportRoot: boolean    // user-designated export target
 }
 

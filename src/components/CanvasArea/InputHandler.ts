@@ -5,6 +5,7 @@ import { uid } from '../../store/editorStore'
 import { type HandleName, HANDLE_CURSORS } from './CanvasTypes'
 import { toLocalSpace, getHandlePositions, getRotateHandlePosition, hitTest, rotatePoint, computeResize, normalizeDegrees } from './CanvasHelpers'
 import { CanvasRenderer } from './CanvasRenderer'
+import { getBuffer } from './BufferRegistry'
 
 interface InputRefs {
     zoomRef: RefObject<number>
@@ -33,14 +34,16 @@ export class InputHandler {
     private isDragging = false
     private isResizing = false
     private isRotating = false
+    private isDrawing = false
     private didDrag = false
     private hoveredHandle: HandleName | null = null
     private activeHandle: HandleName | null = null
-    private lastMouse = { x: 0, y: 0 }
+    private lastMousePos = { x: 0, y: 0 }
     private dragStartMouse = { x: 0, y: 0 }
     private dragStartPos = { x: 0, y: 0 }
     private resizeStartMouse = { x: 0, y: 0 }
     private resizeStartBounds = { x: 0, y: 0, width: 0, height: 0 }
+    private lastBrushPos = { x: 0, y: 0 }
     private rotateStartAngle = 0
     private rotateStartElementAngle = 0
 
@@ -71,6 +74,7 @@ export class InputHandler {
     handleMouseDown = (e: MouseEvent) => {
         if (e.button === 1) this.HandleMouseDownStartPan(e)  // middle mouse button  
         if (e.button === 0 && this.refs.activeToolRef.current === 'select') this.HandleMouseDownStartSelecting(e)
+        if (e.button === 0 && this.refs.activeToolRef.current === 'brush') this.startBrush(e)
     }
 
 
@@ -81,6 +85,7 @@ export class InputHandler {
         if (this.isDragging) this.applyDrag(e, this.canvas)
         if (this.isResizing) this.applyResize(e, this.canvas)
         if (this.isRotating) this.applyRotate(e, this.canvas)
+        if (this.isDrawing) this.applyBrush(e)
     }
 
 
@@ -90,49 +95,44 @@ export class InputHandler {
             this.isDragging = false
             this.isResizing = false
             this.isRotating = false
+            this.isDrawing = false
             this.activeHandle = null
         }
     }
 
-    handleMouseClick = (e: MouseEvent) => {
-        if (this.didDrag) { //to prevent instant selection other object when moving over another one
-            this.didDrag = false
-            return
-        }
+    private handleSelectClick(e: MouseEvent) {
+        const worldX = (e.offsetX - this.refs.panRef.current.x) / this.refs.zoomRef.current
+        const worldY = (e.offsetY - this.refs.panRef.current.y) / this.refs.zoomRef.current
 
-        const tool = this.refs.activeToolRef.current
-        if (tool === 'select') {
-            const worldX = (e.offsetX - this.refs.panRef.current.x) / this.refs.zoomRef.current
-            const worldY = (e.offsetY - this.refs.panRef.current.y) / this.refs.zoomRef.current
-
-            // collect all hits across all visible unlocked layers
-            const hits: string[] = []
-            for (const layer of this.refs.layersRef.current) {
-                if (!layer.visible || layer.locked) continue
-                for (let i = layer.elements.length - 1; i >= 0; i--) {
-                    if (hitTest(layer.elements[i], worldX, worldY)) {
-                        hits.push(layer.elements[i].id)
-                    }
+        // collect all hits across all visible unlocked layers
+        const hits: string[] = []
+        for (const layer of this.refs.layersRef.current) {
+            if (!layer.visible || layer.locked) continue
+            for (let i = layer.elements.length - 1; i >= 0; i--) {
+                if (hitTest(layer.elements[i], worldX, worldY)) {
+                    hits.push(layer.elements[i].id)
                 }
             }
+        }
 
-            if (hits.length === 0) {
-                this.actions.setSelectedElement(null)
-                return
-            }
-
-            if (hits.length === 1) {
-                this.actions.setSelectedElement(hits[0])
-                return
-            }
-
-            // multiple hits — cycle from current selection
-            const currentIndex = hits.indexOf(this.refs.selectedElementIdRef.current ?? '')
-            const nextIndex = (currentIndex + 1) % hits.length
-            this.actions.setSelectedElement(hits[nextIndex])
+        if (hits.length === 0) {
+            this.actions.setSelectedElement(null)
             return
         }
 
+        if (hits.length === 1) {
+            this.actions.setSelectedElement(hits[0])
+            return
+        }
+
+        // multiple hits — cycle from current selection
+        const currentIndex = hits.indexOf(this.refs.selectedElementIdRef.current ?? '')
+        const nextIndex = (currentIndex + 1) % hits.length
+        this.actions.setSelectedElement(hits[nextIndex])
+        return
+    }
+
+    private spawnElement(e: MouseEvent, tool: string) {
         const layerId = this.refs.activeLayerIdRef.current
         if (!layerId) return
 
@@ -157,14 +157,28 @@ export class InputHandler {
             : { ...base, type: 'ellipse' as const }
 
         this.actions.addElement(layerId, element)
+    }
 
+    handleMouseClick = (e: MouseEvent) => {
+        if (this.didDrag) { //to prevent instant selection other object when moving over another one
+            this.didDrag = false
+            return
+        }
+
+        const tool = this.refs.activeToolRef.current
+        if (tool === 'select') {
+            this.handleSelectClick(e)
+        }
+
+        if (tool === 'rectangle' || tool === 'ellipse')
+            this.spawnElement(e, tool)
     }
 
 
     private HandleMouseDownStartPan(e: MouseEvent) {
         e.preventDefault()
         this.isPanning = true
-        this.lastMouse = { x: e.clientX, y: e.clientY }
+        this.lastMousePos = { x: e.clientX, y: e.clientY }
     }
 
     private HandleMouseDownStartSelecting(e: MouseEvent) {
@@ -240,9 +254,9 @@ export class InputHandler {
     }
 
     private applyPan(e: MouseEvent) {
-        const dx = e.clientX - this.lastMouse.x
-        const dy = e.clientY - this.lastMouse.y
-        this.lastMouse = { x: e.clientX, y: e.clientY }
+        const dx = e.clientX - this.lastMousePos.x
+        const dy = e.clientY - this.lastMousePos.y
+        this.lastMousePos = { x: e.clientX, y: e.clientY }
         this.actions.setPan(p => ({ x: p.x + dx, y: p.y + dy }))
     }
 
@@ -358,4 +372,41 @@ export class InputHandler {
         }
     }
 
+    private startBrush(e: MouseEvent) {
+        this.isDrawing = true
+        const worldX = (e.offsetX - this.refs.panRef.current.x) / this.refs.zoomRef.current
+        const worldY = (e.offsetY - this.refs.panRef.current.y) / this.refs.zoomRef.current
+        this.lastBrushPos = { x: worldX, y: worldY }
+    }
+
+    private applyBrush(e: MouseEvent) {
+        if (!this.isDrawing) return
+
+        const layerId = this.refs.activeLayerIdRef.current
+        if (!layerId) return
+
+        const buffer = getBuffer(layerId)
+        if (!buffer) return
+
+        const bufCtx = buffer.getContext('2d')
+        if (!bufCtx) return
+
+        const rect = this.canvas.getBoundingClientRect()
+        const worldX = (e.clientX - rect.left - this.refs.panRef.current.x) / this.refs.zoomRef.current
+        const worldY = (e.clientY - rect.top - this.refs.panRef.current.y) / this.refs.zoomRef.current
+
+        bufCtx.strokeStyle = '#000000'
+        bufCtx.lineWidth = 8
+        bufCtx.lineCap = 'round'
+        bufCtx.lineJoin = 'round'
+        bufCtx.beginPath()
+        bufCtx.moveTo(this.lastBrushPos.x, this.lastBrushPos.y)
+        bufCtx.lineTo(worldX, worldY)
+        bufCtx.stroke()
+
+        this.lastBrushPos = { x: worldX, y: worldY }
+
+        // trigger redraw — buffer changed, renderer needs to composite again
+        this.refs.rendererRef.current?.drawFrame()
+    }
 }

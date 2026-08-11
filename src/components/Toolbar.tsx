@@ -15,6 +15,7 @@ export default function Toolbar() {
           <button className={`tool-btn ${activeTool === 'select' ? 'active' : ''}`} onClick={() => setActiveTool('select')}>S</button>
           <button className={`tool-btn ${activeTool === 'rectangle' ? 'active' : ''}`} onClick={() => setActiveTool('rectangle')}>R</button>
           <button className={`tool-btn ${activeTool === 'ellipse' ? 'active' : ''}`} onClick={() => setActiveTool('ellipse')}>E</button>
+          <button className={`tool-btn ${activeTool === 'brush' ? 'active' : ''}`} onClick={() => setActiveTool('brush')}>B</button>
           <button className="tool-btn" title="Text">T</button>
           <button className="tool-btn" title="Image">I</button>
         </div>
