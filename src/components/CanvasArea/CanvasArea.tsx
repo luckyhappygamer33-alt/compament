@@ -61,14 +61,15 @@ export default function CanvasArea() {
 
         rendererRef.current = new CanvasRenderer(canvas, {
             panRef, zoomRef, artboardSizeRef,
-            layersRef, selectedElementIdRef, hoveredHandleRef
+            layersRef, selectedElementIdRef, hoveredHandleRef, activeLayerIdRef
         })
 
         handlerRef.current = new InputHandler(
             canvas,
             {
                 zoomRef, panRef, layersRef, selectedElementIdRef,
-                activeToolRef, activeLayerIdRef, rendererRef
+                activeToolRef, activeLayerIdRef, rendererRef,
+                hoveredHandleRef,   // shared ref — InputHandler writes, renderer reads
             },
             {
                 setZoom, setPan, updateElement, setSelectedElement,
@@ -114,9 +115,12 @@ export default function CanvasArea() {
         })
     }, [artboardSize])
 
-    //draw canvas and canvas elements
+    // Request a redraw whenever visible state changes.
+    // No invalidation call here — the renderer detects internally whether the
+    // background composite needs rebuilding (via reference equality on layer objects).
+    // This means drag frames never trigger an unnecessary composite rebuild.
     useEffect(() => {
-        rendererRef.current?.requestFrame() //if current is null, skip the call entirely
+        rendererRef.current?.requestFrame()
     }, [artboardSize, zoom, pan, layers, selectedElementId])
 
     useEffect(() => {
@@ -127,7 +131,7 @@ export default function CanvasArea() {
             const w = Math.round(canvas.offsetWidth);
             const h = Math.round(canvas.offsetHeight);
             if (w !== canvas.width || h !== canvas.height) {
-                canvas.width = w;   // ← updates buffer resolution
+                canvas.width = w;
                 canvas.height = h;
                 setCanvasSize({ width: w, height: h })
                 rendererRef.current?.requestFrame()

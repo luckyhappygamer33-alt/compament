@@ -15,6 +15,7 @@ interface InputRefs {
     activeToolRef: RefObject<string>
     activeLayerIdRef: RefObject<string | null>
     rendererRef: RefObject<CanvasRenderer | null>
+    hoveredHandleRef: RefObject<HandleName | null>  // shared with renderer so it reads the live value
 }
 
 interface InputActions {
@@ -77,9 +78,7 @@ export class InputHandler {
         if (e.button === 0 && this.refs.activeToolRef.current === 'brush') this.startBrush(e)
     }
 
-
     handleMouseMove = (e: MouseEvent) => {
-
         this.detectHandleHover(e, this.canvas)
         if (this.isPanning) this.applyPan(e)
         if (this.isDragging) this.applyDrag(e, this.canvas)
@@ -87,7 +86,6 @@ export class InputHandler {
         if (this.isRotating) this.applyRotate(e, this.canvas)
         if (this.isDrawing) this.applyBrush(e)
     }
-
 
     handleMouseUp = (e: MouseEvent) => {
         if (e.button === 1) this.isPanning = false
@@ -108,6 +106,7 @@ export class InputHandler {
         const hits: string[] = []
         for (const layer of this.refs.layersRef.current) {
             if (!layer.visible || layer.locked) continue
+            if (layer.id !== this.refs.activeLayerIdRef.current) continue
             for (let i = layer.elements.length - 1; i >= 0; i--) {
                 if (hitTest(layer.elements[i], worldX, worldY)) {
                     hits.push(layer.elements[i].id)
@@ -173,7 +172,6 @@ export class InputHandler {
         if (tool === 'rectangle' || tool === 'ellipse')
             this.spawnElement(e, tool)
     }
-
 
     private HandleMouseDownStartPan(e: MouseEvent) {
         e.preventDefault()
@@ -327,7 +325,6 @@ export class InputHandler {
         }
     }
 
-
     private detectHandleHover(e: MouseEvent, canvas: HTMLCanvasElement) {
         const selected = this.refs.selectedElementIdRef.current
         if (!selected || this.refs.activeToolRef.current !== 'select' || this.isDragging) return
@@ -367,6 +364,9 @@ export class InputHandler {
 
         if (found !== this.hoveredHandle) {
             this.hoveredHandle = found
+            // Write to the shared ref so the renderer reads the live value
+            // on the next frame without any extra state round-trip through React.
+            this.refs.hoveredHandleRef.current = found
             canvas.style.cursor = found ? HANDLE_CURSORS[found] : 'default'
             this.refs.rendererRef.current?.requestFrame()
         }
@@ -406,7 +406,8 @@ export class InputHandler {
 
         this.lastBrushPos = { x: worldX, y: worldY }
 
-        // trigger redraw — buffer changed, renderer needs to composite again
+        // Brush writes directly into the buffer (bypassing the store), so
+        // requestFrame here is the only way to trigger a redraw.
         this.refs.rendererRef.current?.requestFrame()
     }
 }

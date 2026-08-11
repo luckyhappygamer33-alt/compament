@@ -1,9 +1,15 @@
 import type { RefObject } from 'react'
 
-import type { Layer, Size, BaseElement } from '../../types/schema'
+import type { Layer, Size, BaseElement, Element } from '../../types/schema'
 import type { HandleName, Handle } from './CanvasTypes'
 import { degToRad, getHandlePositions, getRotateHandlePosition } from './CanvasHelpers'
 import { getBuffer } from './BufferRegistry'
+
+declare global {
+    interface Window {
+        __renderer: CanvasRenderer
+    }
+}
 
 interface RendererRefs {
     panRef: RefObject<{ x: number; y: number }>
@@ -12,6 +18,7 @@ interface RendererRefs {
     layersRef: RefObject<Layer[]>
     selectedElementIdRef: RefObject<string | null>
     hoveredHandleRef: RefObject<HandleName | null>
+    activeLayerIdRef: RefObject<string | null>
 }
 
 export class CanvasRenderer {
@@ -20,6 +27,44 @@ export class CanvasRenderer {
     private ctx: CanvasRenderingContext2D
 
     private rafId: number | null = null
+    private backgroundComposite: OffscreenCanvas | null = null
+
+    // --- Precise invalidation tracking (replaces backgroundCompositeValid flag) ---
+    // Zustand uses immutable updates, so unchanged layer objects keep the same reference.
+    // During drag, only the active layer object changes — non-active refs stay identical.
+    // This lets us skip the expensive rebuild on every drag frame.
+    private lastActiveLayerId: string | null = null
+    private lastArtboardSize: Size | null = null
+    private lastNonActiveLayerRefs: Layer[] = []
+
+    // -------------------------------------------------------------------------
+    // Performance overlay
+    // Toggle showPerfOverlay at runtime from the browser console:
+    //   window.__renderer.showPerfOverlay = false
+    // -------------------------------------------------------------------------
+    public showPerfOverlay = true
+
+    private perf = {
+        // Per-frame counters — reset at the top of every drawFrame()
+        frameStartMs: 0,
+        activeDrawsThisFrame: 0,     // drawElement calls for the active layer
+        bgRebuiltThisFrame: false,   // did rebuildBackgroundComposite run?
+        inBgRebuild: false,          // flag so drawElement knows which bucket to count
+
+        // Persists across frames — updated only when a rebuild actually happens
+        bgDrawsLastRebuild: 0,       // drawElement calls inside the last bg rebuild
+
+        // Rolling 1-second windows for FPS and rebuild rate
+        frameTimes: [] as number[],
+        rebuildTimes: [] as number[],
+
+        // Frozen snapshot drawn by the overlay (updated at end of each frame)
+        snap: {
+            fps: 0, frameMs: 0,
+            activeDraws: 0, bgDraws: 0,
+            bgRebuilt: false, rebuildsPerSec: 0,
+        },
+    }
 
     constructor(
         canvas: HTMLCanvasElement,
@@ -30,49 +75,54 @@ export class CanvasRenderer {
         const ctx = canvas.getContext('2d')
         if (!ctx) throw new Error('Canvas 2D context (HTML canvas) not available')
         this.ctx = ctx
+
+        window.__renderer = this
     }
 
-    private drawElements(
-        ctx: CanvasRenderingContext2D,
-        layers: Layer[],
+    private drawElement(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, element: Element) {
+        // Count into the right bucket so the overlay can show bg vs active separately.
+        if (this.perf.inBgRebuild) this.perf.bgDrawsLastRebuild++
+        else this.perf.activeDrawsThisFrame++
+
+        ctx.globalAlpha = element.style.opacity
+
+        if (element.style.fill?.type === 'solid') {
+            const { r, g, b, a } = element.style.fill.color
+            ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${a})`
+        } else {
+            ctx.fillStyle = 'transparent'
+        }
+
+        const cx = element.position.x + element.size.width / 2
+        const cy = element.position.y + element.size.height / 2
+
+        ctx.save()
+        ctx.translate(cx, cy)
+        ctx.rotate(degToRad(element.rotation))
+        ctx.translate(-cx, -cy)
+
+        if (element.type === 'rectangle') {
+            ctx.beginPath()
+            ctx.roundRect(element.position.x, element.position.y, element.size.width, element.size.height, element.cornerRadius)
+            ctx.fill()
+        } else if (element.type === 'ellipse') {
+            ctx.beginPath()
+            ctx.ellipse(element.position.x + element.size.width / 2, element.position.y + element.size.height / 2, element.size.width / 2, element.size.height / 2, 0, 0, Math.PI * 2)
+            ctx.fill()
+        }
+
+        ctx.restore()
+        ctx.globalAlpha = 1
+    }
+
+    private drawLayerElements(
+        ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
+        layer: Layer,
     ) {
-        for (const layer of [...layers].reverse()) {
-            if (!layer.visible) continue
-
-            const buffer = getBuffer(layer.id)
-            if (buffer) ctx.drawImage(buffer, 0, 0)
-
-            for (const element of layer.elements) {
-                ctx.globalAlpha = element.style.opacity
-
-                if (element.style.fill?.type === 'solid') {
-                    const { r, g, b, a } = element.style.fill.color
-                    ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${a})`
-                } else {
-                    ctx.fillStyle = 'transparent'
-                }
-
-                const cx = element.position.x + element.size.width / 2
-                const cy = element.position.y + element.size.height / 2
-
-                ctx.save()
-                ctx.translate(cx, cy)
-                ctx.rotate(degToRad(element.rotation))
-                ctx.translate(-cx, -cy)
-
-                if (element.type === 'rectangle') {
-                    ctx.beginPath()
-                    ctx.roundRect(element.position.x, element.position.y, element.size.width, element.size.height, element.cornerRadius)
-                    ctx.fill()
-                } else if (element.type === 'ellipse') {
-                    ctx.beginPath()
-                    ctx.ellipse(element.position.x + element.size.width / 2, element.position.y + element.size.height / 2, element.size.width / 2, element.size.height / 2, 0, 0, Math.PI * 2)
-                    ctx.fill()
-                }
-
-                ctx.restore()
-                ctx.globalAlpha = 1
-            }
+        const buffer = getBuffer(layer.id)
+        if (buffer) ctx.drawImage(buffer, 0, 0)
+        for (const element of layer.elements) {
+            this.drawElement(ctx, element)
         }
     }
 
@@ -114,7 +164,7 @@ export class CanvasRenderer {
             ctx.stroke()
         }
 
-        return handles  // return so drawSelectionBox can pass to drawRotateHandle
+        return handles
     }
 
     drawRotateHandle(
@@ -129,7 +179,6 @@ export class CanvasRenderer {
         const isRotHovered = hoveredHandle === 'rotate'
         const rotRadius = isRotHovered ? 6 / zoom : 5 / zoom
 
-        // line from n handle to rotate circle
         ctx.strokeStyle = '#4a90d9'
         ctx.lineWidth = 1.5 / zoom
         ctx.beginPath()
@@ -137,7 +186,6 @@ export class CanvasRenderer {
         ctx.lineTo(rotHandle.x, rotHandle.y)
         ctx.stroke()
 
-        // circle
         ctx.beginPath()
         ctx.arc(rotHandle.x, rotHandle.y, rotRadius, 0, Math.PI * 2)
         ctx.fillStyle = isRotHovered ? '#4a90d9' : '#ffffff'
@@ -146,7 +194,6 @@ export class CanvasRenderer {
         ctx.lineWidth = 1.5 / zoom
         ctx.stroke()
     }
-
 
     private drawSelectionBox(
         ctx: CanvasRenderingContext2D,
@@ -180,20 +227,87 @@ export class CanvasRenderer {
         }
     }
 
-    requestFrame() {
-        if (this.rafId !== null) return  // already scheduled
-        this.rafId = requestAnimationFrame(() => {
-            this.rafId = null
-            this.drawFrame()  // rename actual draw logic to renderFrame
-        })
+    // Returns true when the background composite must be rebuilt.
+    // Checks three conditions independently so each is easy to reason about:
+    //   1. Active layer switched  → non-active set changed structurally
+    //   2. Artboard resized       → OffscreenCanvas dimensions are stale
+    //   3. A non-active layer object is a new reference → its content changed
+    //
+    // Condition 3 is the key win: during drag, only the active layer object
+    // changes in the Zustand store. Non-active layer references stay identical,
+    // so every drag frame returns false here and the expensive rebuild is skipped.
+    private needsBackgroundRebuild(
+        layers: Layer[],
+        activeLayerId: string | null,
+        artboardSize: Size
+    ): boolean {
+        if (this.lastActiveLayerId !== activeLayerId) return true
+
+        if (
+            !this.lastArtboardSize ||
+            this.lastArtboardSize.width !== artboardSize.width ||
+            this.lastArtboardSize.height !== artboardSize.height
+        ) return true
+
+        const nonActive = layers.filter(l => l.id !== activeLayerId)
+        if (nonActive.length !== this.lastNonActiveLayerRefs.length) return true
+        return nonActive.some((l, i) => l !== this.lastNonActiveLayerRefs[i])
+    }
+
+    private rebuildBackgroundComposite(
+        layers: Layer[],
+        activeLayerId: string | null,
+        artboardSize: Size
+    ) {
+        this.perf.inBgRebuild = true
+        this.perf.bgRebuiltThisFrame = true
+        this.perf.bgDrawsLastRebuild = 0
+        this.perf.rebuildTimes.push(performance.now())
+
+        // Recreate the OffscreenCanvas when dimensions change (was a latent bug:
+        // previously the canvas was only created once, never resized).
+        if (
+            !this.backgroundComposite ||
+            this.backgroundComposite.width !== artboardSize.width ||
+            this.backgroundComposite.height !== artboardSize.height
+        ) {
+            this.backgroundComposite = new OffscreenCanvas(artboardSize.width, artboardSize.height)
+        }
+
+        const ctx = this.backgroundComposite.getContext('2d')!
+        ctx.clearRect(0, 0, artboardSize.width, artboardSize.height)
+
+        // Iterate in reverse (bottom layer first) without allocating a reversed copy.
+        for (let i = layers.length - 1; i >= 0; i--) {
+            const layer = layers[i]
+            if (!layer.visible || layer.id === activeLayerId) continue
+            this.drawLayerElements(ctx, layer)
+        }
+
+        this.perf.inBgRebuild = false
+
+        // Snapshot the state we just composited so needsBackgroundRebuild
+        // can compare against it on the next frame.
+        this.lastActiveLayerId = activeLayerId
+        this.lastArtboardSize = artboardSize
+        this.lastNonActiveLayerRefs = layers.filter(l => l.id !== activeLayerId)
     }
 
     private drawFrame() {
+        // Reset per-frame counters before any drawing happens
+        const frameStart = performance.now()
+        this.perf.frameStartMs = frameStart
+        this.perf.activeDrawsThisFrame = 0
+        this.perf.bgRebuiltThisFrame = false
+
         const { panRef, zoomRef, artboardSizeRef, layersRef,
-            selectedElementIdRef, hoveredHandleRef } = this.refs
+            selectedElementIdRef, hoveredHandleRef, activeLayerIdRef } = this.refs
         const artboardSize = artboardSizeRef.current
         if (!artboardSize) return
 
+        const layers = layersRef.current
+        const activeLayerId = activeLayerIdRef.current
+        const zoom = zoomRef.current
         const ctx = this.ctx
 
         ctx.clearRect(0, 0, this.canvas.width, this.canvas.height)
@@ -201,10 +315,10 @@ export class CanvasRenderer {
 
         ctx.save()
         ctx.translate(panRef.current.x, panRef.current.y)
-        ctx.scale(zoomRef.current, zoomRef.current)
+        ctx.scale(zoom, zoom)
 
         ctx.shadowColor = 'rgba(0, 0, 0, 0.4)'
-        ctx.shadowBlur = 20 / zoomRef.current
+        ctx.shadowBlur = 20 / zoom
 
         ctx.fillStyle = '#ffffff'
         ctx.fillRect(0, 0, artboardSize.width, artboardSize.height)
@@ -212,9 +326,96 @@ export class CanvasRenderer {
         ctx.shadowColor = 'transparent'
         ctx.shadowBlur = 0
 
-        this.drawElements(ctx, layersRef.current)
-        this.drawSelectionBox(ctx, selectedElementIdRef.current, layersRef.current, zoomRef.current, hoveredHandleRef.current)
+        // Only rebuild composite when something in the background actually changed.
+        if (this.needsBackgroundRebuild(layers, activeLayerId, artboardSize)) {
+            this.rebuildBackgroundComposite(layers, activeLayerId, artboardSize)
+        }
+
+        // 1. Pre-composited static layers (single drawImage call)
+        if (this.backgroundComposite) ctx.drawImage(this.backgroundComposite, 0, 0)
+
+        // 2. Active layer — always fresh so in-progress edits are visible immediately
+        const activeLayer = layers.find(l => l.id === activeLayerId)
+        if (activeLayer && activeLayer.visible) {
+            this.drawLayerElements(ctx, activeLayer)
+        }
+
+        // 3. Selection overlay always on top
+        this.drawSelectionBox(ctx, selectedElementIdRef.current, layers, zoom, hoveredHandleRef.current)
 
         ctx.restore()
+
+        // --- Update perf stats and draw overlay ---
+        const now = performance.now()
+        const oneSecAgo = now - 1000
+        this.perf.frameTimes.push(now)
+        // Trim arrays to the last 1-second window
+        this.perf.frameTimes = this.perf.frameTimes.filter(t => t > oneSecAgo)
+        this.perf.rebuildTimes = this.perf.rebuildTimes.filter(t => t > oneSecAgo)
+
+        this.perf.snap = {
+            fps: this.perf.frameTimes.length,
+            frameMs: now - frameStart,
+            activeDraws: this.perf.activeDrawsThisFrame,
+            bgDraws: this.perf.bgDrawsLastRebuild,
+            bgRebuilt: this.perf.bgRebuiltThisFrame,
+            rebuildsPerSec: this.perf.rebuildTimes.length,
+        }
+
+        if (this.showPerfOverlay) this.drawPerfOverlay()
+    }
+
+    private drawPerfOverlay() {
+        const ctx = this.ctx
+        const s = this.perf.snap
+        const bgWasRebuilt = s.bgRebuilt
+
+        const lines = [
+            `${s.fps} fps  |  ${s.frameMs.toFixed(1)} ms/frame`,
+            `active layer:  ${s.activeDraws} drawElement/frame`,
+            `bg composite:  ${s.bgDraws} drawElement (last rebuild)`,
+            `bg rebuilt:    ${bgWasRebuilt ? '[!] YES' : 'no'}  (${s.rebuildsPerSec}/sec)`,
+        ]
+
+        const PAD = 10
+        const LINE_H = 18
+        const FONT_SIZE = 12
+        const BOX_W = 290
+        const BOX_H = lines.length * LINE_H + PAD * 2
+        const BX = 10, BY = 10
+
+        ctx.save()
+        ctx.resetTransform()   // draw in screen space regardless of pan/zoom
+        ctx.font = `${FONT_SIZE}px monospace`
+
+        // Background panel
+        ctx.fillStyle = 'rgba(8, 8, 16, 0.82)'
+        ctx.beginPath()
+        ctx.roundRect(BX, BY, BOX_W, BOX_H, 5)
+        ctx.fill()
+
+        // Subtle border
+        ctx.strokeStyle = 'rgba(255,255,255,0.1)'
+        ctx.lineWidth = 1
+        ctx.stroke()
+
+        // Text lines
+        ctx.textBaseline = 'top'
+        lines.forEach((line, i) => {
+            // Red if bg rebuild happened this frame (the bad state), dim white otherwise
+            const isWarning = i === 3 && bgWasRebuilt
+            ctx.fillStyle = isWarning ? '#ff6b6b' : (i === 0 ? '#a8d8ff' : '#cccccc')
+            ctx.fillText(line, BX + PAD, BY + PAD + i * LINE_H)
+        })
+
+        ctx.restore()
+    }
+
+    requestFrame() {
+        if (this.rafId !== null) return  // already scheduled
+        this.rafId = requestAnimationFrame(() => {
+            this.rafId = null
+            this.drawFrame()
+        })
     }
 }
