@@ -1,7 +1,6 @@
 import {
     ChevronUp,
     ChevronDown,
-    GitMerge,
     Eye,
     EyeOff,
     Lock,
