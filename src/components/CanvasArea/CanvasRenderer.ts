@@ -39,6 +39,9 @@ export class CanvasRenderer {
     private lastNonActiveLayerRefsBelow: Layer[] = []
     private lastNonActiveLayerRefsAbove: Layer[] = []
 
+    private rectSelection: { x: number, y: number, width: number, height: number } | null = null
+    private imageCache = new Map<string, HTMLImageElement>()
+
     // -------------------------------------------------------------------------
     // Performance overlay
     // Toggle showPerfOverlay at runtime from the browser console:
@@ -111,6 +114,12 @@ export class CanvasRenderer {
             ctx.beginPath()
             ctx.ellipse(element.position.x + element.size.width / 2, element.position.y + element.size.height / 2, element.size.width / 2, element.size.height / 2, 0, 0, Math.PI * 2)
             ctx.fill()
+        }
+        else if (element.type === 'image') {
+            const img = this.getOrLoadImage(element.src)
+            if (img) {
+                ctx.drawImage(img, element.position.x, element.position.y, element.size.width, element.size.height)
+            }
         }
 
         ctx.restore()
@@ -227,6 +236,26 @@ export class CanvasRenderer {
             ctx.restore()
             break
         }
+    }
+
+    private drawRectSelection(
+        ctx: CanvasRenderingContext2D,
+        rect: { x: number, y: number, width: number, height: number } | null,
+        zoom: number
+    ) {
+        if (rect == null) return
+        ctx.save()
+        ctx.strokeStyle = '#ceff1a'
+        ctx.lineWidth = 1.5 / zoom
+        ctx.setLineDash([6 / zoom, 3 / zoom])  // dashed line scaled to zoom
+        ctx.strokeRect(rect.x, rect.y, rect.width, rect.height)
+
+        // semi-transparent fill
+        ctx.fillStyle = 'rgba(206, 255, 26, 0.08)'
+        ctx.fillRect(rect.x, rect.y, rect.width, rect.height)
+
+        ctx.setLineDash([])  // reset dash so nothing else gets dashed
+        ctx.restore()
     }
 
     private needsBackgroundRebuild(
@@ -347,6 +376,8 @@ export class CanvasRenderer {
         // 4. selection box always on top
         this.drawSelectionBox(ctx, selectedElementIdRef.current, layers, zoom, hoveredHandleRef.current)
 
+        this.drawRectSelection(ctx, this.rectSelection, zoom)
+
         ctx.restore()
 
         // --- Update perf stats and draw overlay ---
@@ -429,5 +460,21 @@ export class CanvasRenderer {
         const bufCtx = buffer.getContext('2d')
         if (!bufCtx) return
         this.drawElement(bufCtx, element)
+    }
+
+    setRectSelection(rect: { x: number, y: number, width: number, height: number } | null) {
+        this.rectSelection = rect
+    }
+
+    private getOrLoadImage(src: string): HTMLImageElement | null {
+        if (this.imageCache.has(src)) return this.imageCache.get(src)!
+
+        const img = new Image()
+        img.onload = () => {
+            this.imageCache.set(src, img)
+            this.requestFrame()  // redraw once loaded
+        }
+        img.src = src
+        return null  // not ready yet — will redraw on load
     }
 }
