@@ -27,7 +27,8 @@ export class CanvasRenderer {
     private ctx: CanvasRenderingContext2D
 
     private rafId: number | null = null
-    private backgroundComposite: OffscreenCanvas | null = null
+    private backgroundCompositeBelow: OffscreenCanvas | null = null
+    private backgroundCompositeAbove: OffscreenCanvas | null = null
 
     // --- Precise invalidation tracking (replaces backgroundCompositeValid flag) ---
     // Zustand uses immutable updates, so unchanged layer objects keep the same reference.
@@ -35,7 +36,8 @@ export class CanvasRenderer {
     // This lets us skip the expensive rebuild on every drag frame.
     private lastActiveLayerId: string | null = null
     private lastArtboardSize: Size | null = null
-    private lastNonActiveLayerRefs: Layer[] = []
+    private lastNonActiveLayerRefsBelow: Layer[] = []
+    private lastNonActiveLayerRefsAbove: Layer[] = []
 
     // -------------------------------------------------------------------------
     // Performance overlay
@@ -227,15 +229,6 @@ export class CanvasRenderer {
         }
     }
 
-    // Returns true when the background composite must be rebuilt.
-    // Checks three conditions independently so each is easy to reason about:
-    //   1. Active layer switched  → non-active set changed structurally
-    //   2. Artboard resized       → OffscreenCanvas dimensions are stale
-    //   3. A non-active layer object is a new reference → its content changed
-    //
-    // Condition 3 is the key win: during drag, only the active layer object
-    // changes in the Zustand store. Non-active layer references stay identical,
-    // so every drag frame returns false here and the expensive rebuild is skipped.
     private needsBackgroundRebuild(
         layers: Layer[],
         activeLayerId: string | null,
@@ -249,9 +242,16 @@ export class CanvasRenderer {
             this.lastArtboardSize.height !== artboardSize.height
         ) return true
 
-        const nonActive = layers.filter(l => l.id !== activeLayerId)
-        if (nonActive.length !== this.lastNonActiveLayerRefs.length) return true
-        return nonActive.some((l, i) => l !== this.lastNonActiveLayerRefs[i])
+        const activeIndex = layers.findIndex(l => l.id === activeLayerId)
+        const below = layers.slice(activeIndex + 1)  // higher index = lower in stack
+        const above = layers.slice(0, activeIndex)   // lower index = higher in stack
+
+        if (below.length !== this.lastNonActiveLayerRefsBelow.length) return true
+        if (above.length !== this.lastNonActiveLayerRefsAbove.length) return true
+        if (below.some((l, i) => l !== this.lastNonActiveLayerRefsBelow[i])) return true
+        if (above.some((l, i) => l !== this.lastNonActiveLayerRefsAbove[i])) return true
+
+        return false
     }
 
     private rebuildBackgroundComposite(
@@ -264,33 +264,34 @@ export class CanvasRenderer {
         this.perf.bgDrawsLastRebuild = 0
         this.perf.rebuildTimes.push(performance.now())
 
-        // Recreate the OffscreenCanvas when dimensions change (was a latent bug:
-        // previously the canvas was only created once, never resized).
-        if (
-            !this.backgroundComposite ||
-            this.backgroundComposite.width !== artboardSize.width ||
-            this.backgroundComposite.height !== artboardSize.height
-        ) {
-            this.backgroundComposite = new OffscreenCanvas(artboardSize.width, artboardSize.height)
-        }
+        const needsNew = (c: OffscreenCanvas | null) =>
+            !c || c.width !== artboardSize.width || c.height !== artboardSize.height
 
-        const ctx = this.backgroundComposite.getContext('2d')!
-        ctx.clearRect(0, 0, artboardSize.width, artboardSize.height)
+        if (needsNew(this.backgroundCompositeBelow)) this.backgroundCompositeBelow = new OffscreenCanvas(artboardSize.width, artboardSize.height)
+        if (needsNew(this.backgroundCompositeAbove)) this.backgroundCompositeAbove = new OffscreenCanvas(artboardSize.width, artboardSize.height)
+
+        const ctxBelow = this.backgroundCompositeBelow!.getContext('2d')!
+        const ctxAbove = this.backgroundCompositeAbove!.getContext('2d')!
+        ctxBelow.clearRect(0, 0, artboardSize.width, artboardSize.height)
+        ctxAbove.clearRect(0, 0, artboardSize.width, artboardSize.height)
+
+        const activeIndex = layers.findIndex(l => l.id === activeLayerId)
 
         // Iterate in reverse (bottom layer first) without allocating a reversed copy.
         for (let i = layers.length - 1; i >= 0; i--) {
             const layer = layers[i]
             if (!layer.visible || layer.id === activeLayerId) continue
-            this.drawLayerElements(ctx, layer)
+            // below active = higher index than activeIndex
+            const target = i > activeIndex ? ctxBelow : ctxAbove
+            this.drawLayerElements(target, layer)
         }
 
         this.perf.inBgRebuild = false
 
-        // Snapshot the state we just composited so needsBackgroundRebuild
-        // can compare against it on the next frame.
         this.lastActiveLayerId = activeLayerId
         this.lastArtboardSize = artboardSize
-        this.lastNonActiveLayerRefs = layers.filter(l => l.id !== activeLayerId)
+        this.lastNonActiveLayerRefsBelow = layers.slice(activeIndex + 1)
+        this.lastNonActiveLayerRefsAbove = layers.slice(0, activeIndex)
     }
 
     private drawFrame() {
@@ -331,8 +332,8 @@ export class CanvasRenderer {
             this.rebuildBackgroundComposite(layers, activeLayerId, artboardSize)
         }
 
-        // 1. Pre-composited static layers (single drawImage call)
-        if (this.backgroundComposite) ctx.drawImage(this.backgroundComposite, 0, 0)
+        // 1. layers below active
+        if (this.backgroundCompositeBelow) ctx.drawImage(this.backgroundCompositeBelow, 0, 0)
 
         // 2. Active layer — always fresh so in-progress edits are visible immediately
         const activeLayer = layers.find(l => l.id === activeLayerId)
@@ -340,7 +341,10 @@ export class CanvasRenderer {
             this.drawLayerElements(ctx, activeLayer)
         }
 
-        // 3. Selection overlay always on top
+        // 3. layers above active
+        if (this.backgroundCompositeAbove) ctx.drawImage(this.backgroundCompositeAbove, 0, 0)
+
+        // 4. selection box always on top
         this.drawSelectionBox(ctx, selectedElementIdRef.current, layers, zoom, hoveredHandleRef.current)
 
         ctx.restore()
@@ -417,5 +421,13 @@ export class CanvasRenderer {
             this.rafId = null
             this.drawFrame()
         })
+    }
+
+    bakeElement(layerId: string, element: Element): void {
+        const buffer = getBuffer(layerId)
+        if (!buffer) return
+        const bufCtx = buffer.getContext('2d')
+        if (!bufCtx) return
+        this.drawElement(bufCtx, element)
     }
 }

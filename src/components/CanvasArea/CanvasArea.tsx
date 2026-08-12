@@ -19,6 +19,7 @@ export default function CanvasArea() {
     const setSelectedElement = useEditorStore(state => state.setSelectedElement)
     const selectedElementId = useEditorStore(state => state.selectedElementId)
     const updateElement = useEditorStore(state => state.updateElement)
+    const deleteElement = useEditorStore(state => state.deleteElement)
 
     const [zoom, setZoom] = useState(1)
     const [pan, setPan] = useState({ x: 0, y: 0 })
@@ -158,6 +159,22 @@ export default function CanvasArea() {
         })
     }
 
+    const handleBake = () => {
+        if (!selectedElementId || !activeLayerId) return
+
+        // find the element
+        const layer = layers.find(l => l.id === activeLayerId)
+        const element = layer?.elements.find(e => e.id === selectedElementId)
+        if (!element) return
+
+        // stamp pixels into buffer
+        rendererRef.current?.bakeElement(activeLayerId, element)
+
+        // remove from floating elements
+        deleteElement(activeLayerId, selectedElementId)
+        setSelectedElement(null)
+    }
+
     return (
         <div className="canvas-area">
             <div className="canvas-breadcrumb-bar">
@@ -169,6 +186,25 @@ export default function CanvasArea() {
                     <div className="zoom-indicator" onClick={handleResetZoom}>
                         {Math.round((zoom / fitZoom) * 100)}%
                     </div>
+                )}
+                {selectedElementId && (
+                    <button
+                        onClick={handleBake}
+                        style={{
+                            position: 'absolute',
+                            top: 40,
+                            right: 12,
+                            padding: '4px 10px',
+                            background: '#414066',
+                            border: 'none',
+                            borderRadius: 4,
+                            color: '#fff',
+                            fontSize: 11,
+                            cursor: 'pointer'
+                        }}
+                    >
+                        Bake
+                    </button>
                 )}
             </div>
         </div>
