@@ -323,7 +323,7 @@ export class CanvasRenderer {
         this.lastNonActiveLayerRefsAbove = layers.slice(0, activeIndex)
     }
 
-    private drawFrame() {
+    drawFrame() {
         // Reset per-frame counters before any drawing happens
         const frameStart = performance.now()
         this.perf.frameStartMs = frameStart

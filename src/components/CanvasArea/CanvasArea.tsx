@@ -135,7 +135,7 @@ export default function CanvasArea() {
                 canvas.width = w;
                 canvas.height = h;
                 setCanvasSize({ width: w, height: h })
-                rendererRef.current?.requestFrame()
+                rendererRef.current?.drawFrame()
             }
         });
 
