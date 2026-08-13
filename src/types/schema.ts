@@ -25,7 +25,10 @@ export interface Size {
 // STYLE — properties that can be applied to any element
 // ============================================================
 
-type Fill = { type: 'solid'; color: Color }
+type Fill = {
+    type: 'solid';
+    color: Color
+}
 
 // Shared visual properties every element can have
 interface ElementStyle {
