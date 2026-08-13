@@ -1,3 +1,17 @@
+.properties-panel {
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--color-border);
+    background: var(--color-bg-panel);
+    flex-shrink: 0;
+    overflow: hidden;
+    flex: 0 1 17%;
+    min-width: 220px;
+    max-width: 360px;
+
+    min-height: 0;
+}
+
 .panel-header {
     height: 36px;
     padding: 0 12px;
@@ -24,16 +38,6 @@
     display: block;
     text-align: center;
     margin-top: 24px;
-}
-
-.properties-panel {
-    width: var(--panel-width);
-    display: flex;
-    flex-direction: column;
-    border-right: 1px solid var(--color-border);
-    background: var(--color-bg-panel);
-    flex-shrink: 0;
-    overflow: hidden;
 }
 
 .panel-header {
