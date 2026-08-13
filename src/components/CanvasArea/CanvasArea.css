@@ -47,3 +47,19 @@
     color: var(--color-text);
     background: var(--color-hover);
 }
+
+.canvas-viewport {
+    position: relative;
+}
+
+.editor-canvas,
+.overlay-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.overlay-canvas {
+    pointer-events: none;
+}

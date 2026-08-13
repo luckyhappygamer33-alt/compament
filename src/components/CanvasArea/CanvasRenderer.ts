@@ -42,37 +42,16 @@ export class CanvasRenderer {
     private rectSelection: { x: number, y: number, width: number, height: number } | null = null
     private imageCache = new Map<string, HTMLImageElement>()
 
-    // -------------------------------------------------------------------------
-    // Performance overlay
-    // Toggle showPerfOverlay at runtime from the browser console:
-    //   window.__renderer.showPerfOverlay = false
-    // -------------------------------------------------------------------------
-    public showPerfOverlay = true
-
-    private perf = {
-        // Per-frame counters — reset at the top of every drawFrame()
-        frameStartMs: 0,
-        activeDrawsThisFrame: 0,     // drawElement calls for the active layer
-        bgRebuiltThisFrame: false,   // did rebuildBackgroundComposite run?
-        inBgRebuild: false,          // flag so drawElement knows which bucket to count
-
-        // Persists across frames — updated only when a rebuild actually happens
-        bgDrawsLastRebuild: 0,       // drawElement calls inside the last bg rebuild
-
-        // Rolling 1-second windows for FPS and rebuild rate
-        frameTimes: [] as number[],
-        rebuildTimes: [] as number[],
-
-        // Frozen snapshot drawn by the overlay (updated at end of each frame)
-        snap: {
-            fps: 0, frameMs: 0,
-            activeDraws: 0, bgDraws: 0,
-            bgRebuilt: false, rebuildsPerSec: 0,
-        },
-    }
+    // --- Overlay (FPS counter, runs its own RAF loop) ---
+    private overlayCanvas: HTMLCanvasElement
+    private overlayCtx: CanvasRenderingContext2D
+    private overlayRafId: number | null = null
+    private frameTimes: number[] = []   // timestamps of recent drawFrame() calls
+    private fps = 0
 
     constructor(
         canvas: HTMLCanvasElement,
+        overlayCanvas: HTMLCanvasElement,
         refs: RendererRefs
     ) {
         this.canvas = canvas
@@ -81,13 +60,53 @@ export class CanvasRenderer {
         if (!ctx) throw new Error('Canvas 2D context (HTML canvas) not available')
         this.ctx = ctx
 
+        this.overlayCanvas = overlayCanvas
+        const overlayCtx = overlayCanvas.getContext('2d')
+        if (!overlayCtx) throw new Error('Overlay 2D context not available')
+        this.overlayCtx = overlayCtx
+
         window.__renderer = this
+
+        this.startOverlayLoop()
+    }
+
+    private startOverlayLoop() {
+        const tick = () => {
+            // Compute FPS from main-canvas frame timestamps recorded in drawFrame()
+            const now = performance.now()
+            while (this.frameTimes.length > 0 && now - this.frameTimes[0] > 1000) {
+                this.frameTimes.shift()
+            }
+            this.fps = this.frameTimes.length
+
+            this.drawOverlay()
+            this.overlayRafId = requestAnimationFrame(tick)
+        }
+        this.overlayRafId = requestAnimationFrame(tick)
+    }
+
+    private getFpsColor(fps: number): string {
+        const t = Math.min(fps / 80, 1)          // clamp: 80fps = full green
+        const hue = Math.round(t * 120)           // 0 → red, 120 → green
+        return `hsl(${hue}, 100%, 55%)`
+    }
+
+    private drawOverlay() {
+        const ctx = this.overlayCtx
+        ctx.clearRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height)
+        ctx.fillStyle = 'rgba(0,0,0,0.45)'
+        ctx.fillRect(6, 6, 58, 20)
+        ctx.fillStyle = this.getFpsColor(this.fps)
+        ctx.font = '11px monospace'
+        ctx.fillText(this.fps === 0 ? 'idle' : `${this.fps} FPS`, 10, 20)
+    }
+
+    resizeOverlay(w: number, h: number) {
+        this.overlayCanvas.width = w
+        this.overlayCanvas.height = h
     }
 
     private drawElement(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, element: Element) {
-        // Count into the right bucket so the overlay can show bg vs active separately.
-        if (this.perf.inBgRebuild) this.perf.bgDrawsLastRebuild++
-        else this.perf.activeDrawsThisFrame++
 
         ctx.globalAlpha = element.style.opacity
 
@@ -288,11 +307,6 @@ export class CanvasRenderer {
         activeLayerId: string | null,
         artboardSize: Size
     ) {
-        this.perf.inBgRebuild = true
-        this.perf.bgRebuiltThisFrame = true
-        this.perf.bgDrawsLastRebuild = 0
-        this.perf.rebuildTimes.push(performance.now())
-
         const needsNew = (c: OffscreenCanvas | null) =>
             !c || c.width !== artboardSize.width || c.height !== artboardSize.height
 
@@ -315,8 +329,6 @@ export class CanvasRenderer {
             this.drawLayerElements(target, layer)
         }
 
-        this.perf.inBgRebuild = false
-
         this.lastActiveLayerId = activeLayerId
         this.lastArtboardSize = artboardSize
         this.lastNonActiveLayerRefsBelow = layers.slice(activeIndex + 1)
@@ -324,11 +336,8 @@ export class CanvasRenderer {
     }
 
     drawFrame() {
-        // Reset per-frame counters before any drawing happens
-        const frameStart = performance.now()
-        this.perf.frameStartMs = frameStart
-        this.perf.activeDrawsThisFrame = 0
-        this.perf.bgRebuiltThisFrame = false
+        //ovelay canvas
+        this.frameTimes.push(performance.now())
 
         const { panRef, zoomRef, artboardSizeRef, layersRef,
             selectedElementIdRef, hoveredHandleRef, activeLayerIdRef } = this.refs
@@ -377,71 +386,6 @@ export class CanvasRenderer {
         this.drawSelectionBox(ctx, selectedElementIdRef.current, layers, zoom, hoveredHandleRef.current)
 
         this.drawRectSelection(ctx, this.rectSelection, zoom)
-
-        ctx.restore()
-
-        // --- Update perf stats and draw overlay ---
-        const now = performance.now()
-        const oneSecAgo = now - 1000
-        this.perf.frameTimes.push(now)
-        // Trim arrays to the last 1-second window
-        this.perf.frameTimes = this.perf.frameTimes.filter(t => t > oneSecAgo)
-        this.perf.rebuildTimes = this.perf.rebuildTimes.filter(t => t > oneSecAgo)
-
-        this.perf.snap = {
-            fps: this.perf.frameTimes.length,
-            frameMs: now - frameStart,
-            activeDraws: this.perf.activeDrawsThisFrame,
-            bgDraws: this.perf.bgDrawsLastRebuild,
-            bgRebuilt: this.perf.bgRebuiltThisFrame,
-            rebuildsPerSec: this.perf.rebuildTimes.length,
-        }
-
-        if (this.showPerfOverlay) this.drawPerfOverlay()
-    }
-
-    private drawPerfOverlay() {
-        const ctx = this.ctx
-        const s = this.perf.snap
-        const bgWasRebuilt = s.bgRebuilt
-
-        const lines = [
-            `${s.fps} fps  |  ${s.frameMs.toFixed(1)} ms/frame`,
-            `active layer:  ${s.activeDraws} drawElement/frame`,
-            `bg composite:  ${s.bgDraws} drawElement (last rebuild)`,
-            `bg rebuilt:    ${bgWasRebuilt ? '[!] YES' : 'no'}  (${s.rebuildsPerSec}/sec)`,
-        ]
-
-        const PAD = 10
-        const LINE_H = 18
-        const FONT_SIZE = 12
-        const BOX_W = 290
-        const BOX_H = lines.length * LINE_H + PAD * 2
-        const BX = 10, BY = 10
-
-        ctx.save()
-        ctx.resetTransform()   // draw in screen space regardless of pan/zoom
-        ctx.font = `${FONT_SIZE}px monospace`
-
-        // Background panel
-        ctx.fillStyle = 'rgba(8, 8, 16, 0.82)'
-        ctx.beginPath()
-        ctx.roundRect(BX, BY, BOX_W, BOX_H, 5)
-        ctx.fill()
-
-        // Subtle border
-        ctx.strokeStyle = 'rgba(255,255,255,0.1)'
-        ctx.lineWidth = 1
-        ctx.stroke()
-
-        // Text lines
-        ctx.textBaseline = 'top'
-        lines.forEach((line, i) => {
-            // Red if bg rebuild happened this frame (the bad state), dim white otherwise
-            const isWarning = i === 3 && bgWasRebuilt
-            ctx.fillStyle = isWarning ? '#ff6b6b' : (i === 0 ? '#a8d8ff' : '#cccccc')
-            ctx.fillText(line, BX + PAD, BY + PAD + i * LINE_H)
-        })
 
         ctx.restore()
     }

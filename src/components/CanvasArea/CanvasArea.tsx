@@ -8,6 +8,7 @@ import { InputHandler } from './InputHandler'
 
 export default function CanvasArea() {
     const canvasRef = useRef<HTMLCanvasElement>(null)
+    const overlayCanvasRef = useRef<HTMLCanvasElement>(null)
     const rendererRef = useRef<CanvasRenderer | null>(null)
     const handlerRef = useRef<InputHandler | null>(null)
 
@@ -58,9 +59,10 @@ export default function CanvasArea() {
     // instantiate renderer + handler once
     useEffect(() => {
         const canvas = canvasRef.current
-        if (!canvas) return
+        const overlayCanvas = overlayCanvasRef.current
+        if (!canvas || !overlayCanvas) return
 
-        rendererRef.current = new CanvasRenderer(canvas, {
+        rendererRef.current = new CanvasRenderer(canvas, overlayCanvas, {
             panRef, zoomRef, artboardSizeRef,
             layersRef, selectedElementIdRef, hoveredHandleRef, activeLayerIdRef
         })
@@ -134,6 +136,7 @@ export default function CanvasArea() {
             if (w !== canvas.width || h !== canvas.height) {
                 canvas.width = w;
                 canvas.height = h;
+                rendererRef.current?.resizeOverlay(w, h) //overlay resizing
                 setCanvasSize({ width: w, height: h })
                 rendererRef.current?.drawFrame()
             }
@@ -182,6 +185,10 @@ export default function CanvasArea() {
             </div>
             <div className="canvas-viewport">
                 <canvas ref={canvasRef} className="editor-canvas" />
+                <canvas
+                    ref={overlayCanvasRef}
+                    className="overlay-canvas"
+                />
                 {artboardSize && (
                     <div className="zoom-indicator" onClick={handleResetZoom}>
                         {Math.round((zoom / fitZoom) * 100)}%
