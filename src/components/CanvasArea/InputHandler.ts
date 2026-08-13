@@ -4,7 +4,7 @@ import type { Layer, Element, BaseElement } from '../../types/schema'
 import { uid } from '../../store/editorStore'
 import { type HandleName, HANDLE_CURSORS } from './CanvasTypes'
 import { toLocalSpace, getHandlePositions, getRotateHandlePosition, hitTest, rotatePoint, computeResize, normalizeDegrees, degToRad } from './CanvasHelpers'
-import { CanvasRenderer } from './CanvasRenderer'
+import { Renderer } from './Render/Renderer'
 import { getBuffer } from './BufferRegistry'
 
 interface InputRefs {
@@ -14,7 +14,7 @@ interface InputRefs {
     selectedElementIdRef: RefObject<string | null>
     activeToolRef: RefObject<string>
     activeLayerIdRef: RefObject<string | null>
-    rendererRef: RefObject<CanvasRenderer | null>
+    rendererRef: RefObject<Renderer | null>
     hoveredHandleRef: RefObject<HandleName | null>  // shared with renderer so it reads the live value
 }
 

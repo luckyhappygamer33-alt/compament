@@ -3,13 +3,13 @@ import { useEditorStore } from '../../store/editorStore'
 import Breadcrumb from '../Breadcrumb/Breadcrumb'
 import './CanvasArea.css'
 import { type HandleName } from './CanvasTypes'
-import { CanvasRenderer } from './CanvasRenderer'
+import { Renderer } from './Render/Renderer'
 import { InputHandler } from './InputHandler'
 
 export default function CanvasArea() {
     const canvasRef = useRef<HTMLCanvasElement>(null)
     const overlayCanvasRef = useRef<HTMLCanvasElement>(null)
-    const rendererRef = useRef<CanvasRenderer | null>(null)
+    const rendererRef = useRef<Renderer | null>(null)
     const handlerRef = useRef<InputHandler | null>(null)
 
     const artboardSize = useEditorStore(state => state.artboardSize)
@@ -62,7 +62,7 @@ export default function CanvasArea() {
         const overlayCanvas = overlayCanvasRef.current
         if (!canvas || !overlayCanvas) return
 
-        rendererRef.current = new CanvasRenderer(canvas, overlayCanvas, {
+        rendererRef.current = new Renderer(canvas, overlayCanvas, {
             panRef, zoomRef, artboardSizeRef,
             layersRef, selectedElementIdRef, hoveredHandleRef, activeLayerIdRef
         })
@@ -186,8 +186,7 @@ export default function CanvasArea() {
             <div className="canvas-viewport">
                 <canvas ref={canvasRef} className="editor-canvas" />
                 <canvas
-                    ref={overlayCanvasRef}
-                    className="overlay-canvas"
+                    ref={overlayCanvasRef} className="overlay-canvas"
                 />
                 {artboardSize && (
                     <div className="zoom-indicator" onClick={handleResetZoom}>

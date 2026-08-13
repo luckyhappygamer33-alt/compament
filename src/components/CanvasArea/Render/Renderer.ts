@@ -1,13 +1,14 @@
 import type { RefObject } from 'react'
 
-import type { Layer, Size, BaseElement, Element } from '../../types/schema'
-import type { HandleName, Handle } from './CanvasTypes'
-import { degToRad, getHandlePositions, getRotateHandlePosition } from './CanvasHelpers'
-import { getBuffer } from './BufferRegistry'
+import type { Layer, Size, BaseElement, Element } from '../../../types/schema'
+import type { HandleName, Handle } from '../CanvasTypes'
+import { degToRad, getHandlePositions, getRotateHandlePosition } from '../CanvasHelpers'
+import { getBuffer } from '../BufferRegistry'
+import { OverlayRenderer } from './OverlayRenderer'
 
 declare global {
     interface Window {
-        __renderer: CanvasRenderer
+        __renderer: Renderer
     }
 }
 
@@ -21,7 +22,7 @@ interface RendererRefs {
     activeLayerIdRef: RefObject<string | null>
 }
 
-export class CanvasRenderer {
+export class Renderer {
     private canvas: HTMLCanvasElement
     private refs: RendererRefs
     private ctx: CanvasRenderingContext2D
@@ -42,12 +43,7 @@ export class CanvasRenderer {
     private rectSelection: { x: number, y: number, width: number, height: number } | null = null
     private imageCache = new Map<string, HTMLImageElement>()
 
-    // --- Overlay (FPS counter, runs its own RAF loop) ---
-    private overlayCanvas: HTMLCanvasElement
-    private overlayCtx: CanvasRenderingContext2D
-    private overlayRafId: number | null = null
-    private frameTimes: number[] = []   // timestamps of recent drawFrame() calls
-    private fps = 0
+    private overlayRenderer: OverlayRenderer
 
     constructor(
         canvas: HTMLCanvasElement,
@@ -60,50 +56,13 @@ export class CanvasRenderer {
         if (!ctx) throw new Error('Canvas 2D context (HTML canvas) not available')
         this.ctx = ctx
 
-        this.overlayCanvas = overlayCanvas
-        const overlayCtx = overlayCanvas.getContext('2d')
-        if (!overlayCtx) throw new Error('Overlay 2D context not available')
-        this.overlayCtx = overlayCtx
+        this.overlayRenderer = new OverlayRenderer(overlayCanvas)
 
         window.__renderer = this
-
-        this.startOverlayLoop()
     }
 
-    private startOverlayLoop() {
-        const tick = () => {
-            // Compute FPS from main-canvas frame timestamps recorded in drawFrame()
-            const now = performance.now()
-            while (this.frameTimes.length > 0 && now - this.frameTimes[0] > 1000) {
-                this.frameTimes.shift()
-            }
-            this.fps = this.frameTimes.length
-
-            this.drawOverlay()
-            this.overlayRafId = requestAnimationFrame(tick)
-        }
-        this.overlayRafId = requestAnimationFrame(tick)
-    }
-
-    private getFpsColor(fps: number): string {
-        const t = Math.min(fps / 80, 1)          // clamp: 80fps = full green
-        const hue = Math.round(t * 120)           // 0 → red, 120 → green
-        return `hsl(${hue}, 100%, 55%)`
-    }
-
-    private drawOverlay() {
-        const ctx = this.overlayCtx
-        ctx.clearRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height)
-        ctx.fillStyle = 'rgba(0,0,0,0.45)'
-        ctx.fillRect(6, 6, 58, 20)
-        ctx.fillStyle = this.getFpsColor(this.fps)
-        ctx.font = '11px monospace'
-        ctx.fillText(this.fps === 0 ? 'idle' : `${this.fps} FPS`, 10, 20)
-    }
-
-    resizeOverlay(w: number, h: number) {
-        this.overlayCanvas.width = w
-        this.overlayCanvas.height = h
+    resizeOverlay(width: number, height: number) {
+        this.overlayRenderer.resize(width, height)
     }
 
     private drawElement(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, element: Element) {
@@ -336,8 +295,7 @@ export class CanvasRenderer {
     }
 
     drawFrame() {
-        //ovelay canvas
-        this.frameTimes.push(performance.now())
+        this.overlayRenderer.recordFrame()
 
         const { panRef, zoomRef, artboardSizeRef, layersRef,
             selectedElementIdRef, hoveredHandleRef, activeLayerIdRef } = this.refs
