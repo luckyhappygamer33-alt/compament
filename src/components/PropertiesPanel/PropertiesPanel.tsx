@@ -1,6 +1,6 @@
 import './PropertiesPanel.css'
-import { useEditorStore } from '../store/editorStore'
-import type { Color, Element } from '../types/schema'
+import { useEditorStore } from '../../store/editorStore'
+import type { Color, Element } from '../../types/schema'
 
 function colorToHex(color: Color): string {
     const toHex = (value: number) =>

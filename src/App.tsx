@@ -1,10 +1,10 @@
 import './App.css'
 import { useEditorStore } from './store/editorStore'
-import Toolbar from './components/Toolbar'
-import PropertiesPanel from './components/PropertiesPanel'
+import Toolbar from './components/Toolbar/Toolbar'
+import PropertiesPanel from './components/PropertiesPanel/PropertiesPanel'
 import CanvasArea from './components/CanvasArea/CanvasArea'
-import LayersPanel from './components/LayersPanel'
-import NewProjectModal from './components/NewProjectModal'
+import LayersPanel from './components/LayersPanel/LayersPanel'
+import NewProjectModal from './components/NewProjectModal/NewProjectModal'
 
 export default function App() {
     // artboardSize is null until initProject is called

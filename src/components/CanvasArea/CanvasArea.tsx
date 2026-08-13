@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState } from 'react'
 import { useEditorStore } from '../../store/editorStore'
-import Breadcrumb from '../Breadcrumb'
+import Breadcrumb from '../Breadcrumb/Breadcrumb'
 import './CanvasArea.css'
 import { type HandleName } from './CanvasTypes'
 import { CanvasRenderer } from './CanvasRenderer'

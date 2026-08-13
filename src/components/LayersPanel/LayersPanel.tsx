@@ -9,7 +9,7 @@ import {
     Plus,
     LayerArrowDown,
 } from 'lucide-react'
-import { useEditorStore } from '../store/editorStore'
+import { useEditorStore } from '../../store/editorStore'
 import './LayersPanel.css'
 
 export default function LayersPanel() {

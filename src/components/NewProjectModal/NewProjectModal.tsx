@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useEditorStore } from '../store/editorStore'
+import { useEditorStore } from '../../store/editorStore'
 import './NewProjectModal.css'
 
 const PRESETS = [

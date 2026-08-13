@@ -1,5 +1,5 @@
 import './Toolbar.css'
-import { useEditorStore } from '../store/editorStore'
+import { useEditorStore } from '../../store/editorStore'
 
 export default function Toolbar() {
   const activeTool = useEditorStore(state => state.activeTool)
