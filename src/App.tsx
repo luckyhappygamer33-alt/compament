@@ -21,9 +21,7 @@ export default function App() {
             <div className="app-body">
                 <PropertiesPanel />
                 <CanvasArea />
-                <div className="right-sidebar">
-                    <LayersPanel />
-                </div>
+                <LayersPanel />
             </div>
         </div>
     )

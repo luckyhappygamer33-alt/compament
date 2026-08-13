@@ -5,9 +5,12 @@
     flex-direction: column;
     flex: 1;
     min-height: 0;
-    min-width: 0;
+    flex: 0 1 17%;
+    min-width: 220px;
+    max-width: 360px;
 
     border-bottom: 1px solid var(--color-border);
+    border-left: 1px solid var(--color-border);
     background-color: var(--color-bg-panel);
 
     overflow-y: auto;
