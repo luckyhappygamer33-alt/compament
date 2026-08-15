@@ -128,7 +128,10 @@ function computeResize(
     return { x: new_cx - nw2, y: new_cy - nh2, width: nw, height: nh }
 }
 
-function getHandlePositions(element: BaseElement, padding: number): Handle[] {
+function getHandlePositions(
+    element: { position: { x: number; y: number }; size: { width: number; height: number } },
+    padding: number
+): Handle[] {
     const { x, y } = element.position
     const { width, height } = element.size
     const l = x - padding
@@ -150,7 +153,11 @@ function getHandlePositions(element: BaseElement, padding: number): Handle[] {
     ]
 }
 
-function getRotateHandlePosition(element: BaseElement, padding: number, zoom: number) {
+function getRotateHandlePosition(
+    element: { position: { x: number; y: number }; size: { width: number; height: number } },
+    padding: number,
+    zoom: number
+) {
     const cx = element.position.x + element.size.width / 2 //center x
     const ty = element.position.y - padding //top y
     const offset = 30 / zoom // constant screen distance regardless of zoom

@@ -1,10 +1,11 @@
 import type { RefObject } from 'react'
 
-import type { Layer, Size, BaseElement, Element } from '../../../types/schema'
-import type { HandleName, Handle } from '../CanvasTypes'
-import { degToRad, getHandlePositions, getRotateHandlePosition } from '../CanvasHelpers'
+import type { Layer, Size, Element } from '../../../types/schema'
+import type { HandleName } from '../CanvasTypes'
+import { degToRad } from '../CanvasHelpers'
 import { getBuffer } from '../BufferRegistry'
 import { OverlayRenderer } from './OverlayRenderer'
+import { SelectionRenderer } from './SelectionRenderer'
 
 declare global {
     interface Window {
@@ -44,6 +45,7 @@ export class Renderer {
     private imageCache = new Map<string, HTMLImageElement>()
 
     private overlayRenderer: OverlayRenderer
+    private selectionRenderer = new SelectionRenderer()
 
     constructor(
         canvas: HTMLCanvasElement,
@@ -115,127 +117,6 @@ export class Renderer {
         }
     }
 
-    private drawOutline(
-        ctx: CanvasRenderingContext2D,
-        element: BaseElement,
-        padding: number,
-        zoom: number
-    ) {
-        ctx.strokeStyle = '#7bb4f1'
-        ctx.lineWidth = 2 / zoom
-        ctx.strokeRect(
-            element.position.x - padding,
-            element.position.y - padding,
-            element.size.width + padding * 2,
-            element.size.height + padding * 2
-        )
-    }
-
-    private drawHandles(
-        ctx: CanvasRenderingContext2D,
-        element: BaseElement,
-        padding: number,
-        zoom: number,
-        hoveredHandle: HandleName | null
-    ) {
-        const handles = getHandlePositions(element, padding)
-        const handleSize = 8 / zoom
-
-        for (const handle of handles) {
-            const isHovered = hoveredHandle === handle.name
-            const hs = isHovered ? handleSize * 1.3 : handleSize
-            ctx.fillStyle = isHovered ? '#4a90d9' : '#ffffff'
-            ctx.strokeStyle = '#4a90d9'
-            ctx.lineWidth = 1.5 / zoom
-            ctx.beginPath()
-            ctx.rect(handle.x - hs / 2, handle.y - hs / 2, hs, hs)
-            ctx.fill()
-            ctx.stroke()
-        }
-
-        return handles
-    }
-
-    drawRotateHandle(
-        ctx: CanvasRenderingContext2D,
-        element: BaseElement,
-        padding: number,
-        zoom: number,
-        hoveredHandle: HandleName | null,
-        nHandle: Handle
-    ) {
-        const rotHandle = getRotateHandlePosition(element, padding, zoom)
-        const isRotHovered = hoveredHandle === 'rotate'
-        const rotRadius = isRotHovered ? 6 / zoom : 5 / zoom
-
-        ctx.strokeStyle = '#4a90d9'
-        ctx.lineWidth = 1.5 / zoom
-        ctx.beginPath()
-        ctx.moveTo(nHandle.x, nHandle.y)
-        ctx.lineTo(rotHandle.x, rotHandle.y)
-        ctx.stroke()
-
-        ctx.beginPath()
-        ctx.arc(rotHandle.x, rotHandle.y, rotRadius, 0, Math.PI * 2)
-        ctx.fillStyle = isRotHovered ? '#4a90d9' : '#ffffff'
-        ctx.fill()
-        ctx.strokeStyle = '#4a90d9'
-        ctx.lineWidth = 1.5 / zoom
-        ctx.stroke()
-    }
-
-    private drawSelectionBox(
-        ctx: CanvasRenderingContext2D,
-        selectedElementId: string | null,
-        layers: Layer[],
-        zoom: number,
-        hoveredHandle: HandleName | null
-    ) {
-        if (!selectedElementId) return
-
-        for (const layer of layers) {
-            const element = layer.elements.find(e => e.id === selectedElementId)
-            if (!element) continue
-
-            const PADDING = 10
-            const cx = element.position.x + element.size.width / 2
-            const cy = element.position.y + element.size.height / 2
-
-            ctx.save()
-            ctx.translate(cx, cy)
-            ctx.rotate(degToRad(element.rotation))
-            ctx.translate(-cx, -cy)
-
-            this.drawOutline(ctx, element, PADDING, zoom)
-            const handles = this.drawHandles(ctx, element, PADDING, zoom, hoveredHandle)
-            const nHandle = handles.find(h => h.name === 'n')!
-            this.drawRotateHandle(ctx, element, PADDING, zoom, hoveredHandle, nHandle)
-
-            ctx.restore()
-            break
-        }
-    }
-
-    private drawRectSelection(
-        ctx: CanvasRenderingContext2D,
-        rect: { x: number, y: number, width: number, height: number } | null,
-        zoom: number
-    ) {
-        if (rect == null) return
-        ctx.save()
-        ctx.strokeStyle = '#ceff1a'
-        ctx.lineWidth = 1.5 / zoom
-        ctx.setLineDash([6 / zoom, 3 / zoom])  // dashed line scaled to zoom
-        ctx.strokeRect(rect.x, rect.y, rect.width, rect.height)
-
-        // semi-transparent fill
-        ctx.fillStyle = 'rgba(206, 255, 26, 0.08)'
-        ctx.fillRect(rect.x, rect.y, rect.width, rect.height)
-
-        ctx.setLineDash([])  // reset dash so nothing else gets dashed
-        ctx.restore()
-    }
-
     private needsBackgroundRebuild(
         layers: Layer[],
         activeLayerId: string | null,
@@ -294,6 +175,46 @@ export class Renderer {
         this.lastNonActiveLayerRefsAbove = layers.slice(0, activeIndex)
     }
 
+    private drawSelections(
+        ctx: CanvasRenderingContext2D,
+        layers: Layer[],
+        selectedElementId: string | null,
+        hoveredHandle: HandleName | null,
+        zoom: number
+    ) {
+        if (selectedElementId) {
+            for (const layer of layers) {
+                const element = layer.elements.find(e => e.id === selectedElementId)
+                if (!element) continue
+                this.selectionRenderer.drawSelection(ctx, {
+                    x: element.position.x,
+                    y: element.position.y,
+                    width: element.size.width,
+                    height: element.size.height,
+                }, zoom, {
+                    style: 'solid',
+                    color: '#7bb4f1',
+                    lineWidth: 2,
+                    padding: 10,
+                    rotation: element.rotation,
+                    handles: true,
+                    rotateHandle: true,
+                    hoveredHandle,
+                })
+                break
+            }
+        }
+
+        if (this.rectSelection) {
+            this.selectionRenderer.drawSelection(ctx, this.rectSelection, zoom, {
+                style: 'dashed',
+                color: '#ceff1a',
+                lineWidth: 1.5,
+                fill: 'rgba(206, 255, 26, 0.08)',
+            })
+        }
+    }
+
     drawFrame() {
         this.overlayRenderer.recordFrame()
 
@@ -340,10 +261,7 @@ export class Renderer {
         // 3. layers above active
         if (this.backgroundCompositeAbove) ctx.drawImage(this.backgroundCompositeAbove, 0, 0)
 
-        // 4. selection box always on top
-        this.drawSelectionBox(ctx, selectedElementIdRef.current, layers, zoom, hoveredHandleRef.current)
-
-        this.drawRectSelection(ctx, this.rectSelection, zoom)
+        this.drawSelections(ctx, layers, selectedElementIdRef.current, hoveredHandleRef.current, zoom)
 
         ctx.restore()
     }
