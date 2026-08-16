@@ -28,7 +28,7 @@ const makeRootLayer = (): Layer => ({
     elements: [],
 })
 
-type Tool = 'select' | 'rectangle' | 'ellipse' | 'brush' | 'rectselect'
+type Tool = 'select' | 'rectangle' | 'ellipse' | 'brush' | 'rectangleSelect'
 
 // ----------------------------------------------------------------
 // Store shape — state + actions defined together in one interface
