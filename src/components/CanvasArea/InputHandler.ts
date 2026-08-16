@@ -8,6 +8,7 @@ import { Renderer } from './Render/Renderer'
 import { getBuffer } from './BufferRegistry'
 import { SelectTool } from './Tools/SelectTool'
 import { RectangleTool } from './Tools/RectangleTool'
+import { EllipseTool } from './Tools/EllipseTool'
 
 interface InputRefs {
     zoomRef: RefObject<number>
@@ -43,6 +44,7 @@ export class InputHandler {
 
     private selectTool: SelectTool
     private rectangleTool: RectangleTool
+    private ellipseTool: EllipseTool
 
     constructor(
         canvas: HTMLCanvasElement,
@@ -54,6 +56,7 @@ export class InputHandler {
         this.actions = actions
         this.selectTool = new SelectTool(canvas, refs, actions)
         this.rectangleTool = new RectangleTool(refs, actions)
+        this.ellipseTool = new EllipseTool(refs, actions)
     }
 
     handleWheel = (e: WheelEvent) => {
@@ -93,38 +96,11 @@ export class InputHandler {
         }
     }
 
-    private spawnEllipseEllement(e: MouseEvent, tool: string) {
-        const layerId = this.refs.activeLayerIdRef.current
-        if (!layerId) return
-
-        // convert screen coordinates to world coordinates
-        const worldX = (e.offsetX - this.refs.panRef.current.x) / this.refs.zoomRef.current
-        const worldY = (e.offsetY - this.refs.panRef.current.y) / this.refs.zoomRef.current
-
-        const size = 100
-        const base = {
-            id: uid(),
-            position: { x: worldX - size / 2, y: worldY - size / 2 },
-            size: { width: size, height: size },
-            rotation: 0,
-            style: {
-                opacity: 1,
-                fill: { type: 'solid' as const, color: { r: 74, g: 144, b: 217, a: 1 } }
-            }
-        }
-
-        const element = tool === 'rectangle'
-            ? { ...base, type: 'rectangle' as const, cornerRadius: 0 }
-            : { ...base, type: 'ellipse' as const }
-
-        this.actions.addElement(layerId, element)
-    }
-
     handleMouseClick = (e: MouseEvent) => {
         const tool = this.refs.activeToolRef.current
         if (tool === 'select') { this.selectTool.onClick(e); return }
         if (tool === 'rectangle') { this.rectangleTool.onClick(e); return }
-        if (tool === 'ellipse') { this.spawnEllipseEllement(e, tool) }
+        if (tool === 'ellipse') { this.ellipseTool.onClick(e); return }
     }
 
     private HandleMouseDownStartPan(e: MouseEvent) {
