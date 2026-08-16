@@ -52,19 +52,7 @@ export class InputHandler {
         this.canvas = canvas
         this.refs = refs
         this.actions = actions
-
-        const { zoomRef, panRef, activeLayerIdRef, layersRef, selectedElementIdRef, hoveredHandleRef, rendererRef } = refs
-        const { updateElement, setSelectedElement } = actions
-
-        this.selectTool = new SelectTool(canvas, {
-            zoomRef, panRef, activeLayerIdRef, layersRef, selectedElementIdRef,
-            hoveredHandleRef, rendererRef
-        }, {
-            updateElement, setSelectedElement
-        })
-
-        // this.selectTool = new SelectTool(canvas, refs, actions)
-
+        this.selectTool = new SelectTool(canvas, refs, actions)
         this.rectangleTool = new RectangleTool(refs, actions)
     }
 
