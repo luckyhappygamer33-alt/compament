@@ -7,6 +7,7 @@ import { degToRad } from './CanvasHelpers'
 import { Renderer } from './Render/Renderer'
 import { getBuffer } from './BufferRegistry'
 import { SelectTool } from './Tools/SelectTool'
+import { RectangleTool } from './Tools/RectangleTool'
 
 interface InputRefs {
     zoomRef: RefObject<number>
@@ -41,6 +42,7 @@ export class InputHandler {
     private rectSelectCurrent = { x: 0, y: 0 }
 
     private selectTool: SelectTool
+    private rectangleTool: RectangleTool
 
     constructor(
         canvas: HTMLCanvasElement,
@@ -60,6 +62,10 @@ export class InputHandler {
         }, {
             updateElement, setSelectedElement
         })
+
+        // this.selectTool = new SelectTool(canvas, refs, actions)
+
+        this.rectangleTool = new RectangleTool(refs, actions)
     }
 
     handleWheel = (e: WheelEvent) => {
@@ -99,7 +105,7 @@ export class InputHandler {
         }
     }
 
-    private spawnElement(e: MouseEvent, tool: string) {
+    private spawnEllipseEllement(e: MouseEvent, tool: string) {
         const layerId = this.refs.activeLayerIdRef.current
         if (!layerId) return
 
@@ -129,8 +135,8 @@ export class InputHandler {
     handleMouseClick = (e: MouseEvent) => {
         const tool = this.refs.activeToolRef.current
         if (tool === 'select') { this.selectTool.onClick(e); return }
-
-        if (tool === 'rectangle' || tool === 'ellipse') { this.spawnElement(e, tool) }
+        if (tool === 'rectangle') { this.rectangleTool.onClick(e); return }
+        if (tool === 'ellipse') { this.spawnEllipseEllement(e, tool) }
     }
 
     private HandleMouseDownStartPan(e: MouseEvent) {
