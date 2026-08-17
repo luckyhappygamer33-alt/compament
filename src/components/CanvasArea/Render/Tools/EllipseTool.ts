@@ -1,5 +1,4 @@
-import type { Element } from '../../../../types/schema'
-import { degToRad } from '../../CanvasHelpers'
+import type { EllipseElement } from '../../../../types/schema'
 
 type CanvasContext =
     | CanvasRenderingContext2D
@@ -8,20 +7,13 @@ type CanvasContext =
 export class EllipseTool {
     draw(
         ctx: CanvasContext,
-        element: Element
+        element: EllipseElement
     ) {
-        const centerX = element.position.x + element.size.width / 2
-        const centerY = element.position.y + element.size.height / 2
-
-        ctx.save()
-        ctx.translate(centerX, centerY)
-        ctx.rotate(degToRad(element.rotation))
-        ctx.translate(-centerX, -centerY)
 
         ctx.beginPath()
         ctx.ellipse(
-            centerX,
-            centerY,
+            element.position.x + element.size.width / 2,
+            element.position.y + element.size.height / 2,
             element.size.width / 2,
             element.size.height / 2,
             0,
@@ -29,7 +21,6 @@ export class EllipseTool {
             Math.PI * 2
         )
 
-        ctx.restore()
         ctx.fill()
     }
 }

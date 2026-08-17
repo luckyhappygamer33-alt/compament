@@ -55,7 +55,7 @@ export interface RectangleElement extends BaseElement {
     cornerRadius: number
 }
 
-interface EllipseElement extends BaseElement {
+export interface EllipseElement extends BaseElement {
     type: 'ellipse'
 }
 
