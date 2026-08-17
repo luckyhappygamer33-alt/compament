@@ -50,7 +50,7 @@ export interface BaseElement {
     style: ElementStyle
 }
 
-interface RectangleElement extends BaseElement {
+export interface RectangleElement extends BaseElement {
     type: 'rectangle'
     cornerRadius: number
 }

@@ -8,6 +8,7 @@ import { OverlayRenderer } from './OverlayRenderer'
 import { SelectionRenderer } from './SelectionRenderer'
 
 import { EllipseTool } from './Tools/EllipseTool'
+import { RectangleTool } from './Tools/RectangleTool'
 
 declare global {
     interface Window {
@@ -50,6 +51,7 @@ export class Renderer {
     private selectionRenderer = new SelectionRenderer()
 
     private ellipseTool = new EllipseTool()
+    private rectangleTool = new RectangleTool()
 
     constructor(
         canvas: HTMLCanvasElement,
@@ -91,9 +93,7 @@ export class Renderer {
         ctx.translate(-cx, -cy)
 
         if (element.type === 'rectangle') {
-            ctx.beginPath()
-            ctx.roundRect(element.position.x, element.position.y, element.size.width, element.size.height, element.cornerRadius)
-            ctx.fill()
+            this.rectangleTool.draw(ctx, element)
         } else if (element.type === 'ellipse') {
             this.ellipseTool.draw(ctx, element)
         }
