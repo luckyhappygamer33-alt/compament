@@ -1,12 +1,12 @@
 import type { RefObject } from 'react'
-import type { Layer, Element } from '../../../types/schema'
-import type { HandleName } from '../CanvasTypes'
-import type { Renderer } from '../Render/Renderer'
-import { HANDLE_CURSORS } from '../CanvasTypes'
+import type { Layer, Element } from '../../../../types/schema'
+import type { HandleName } from '../../CanvasTypes'
+import type { Renderer } from '../../Render/Renderer'
+import { HANDLE_CURSORS } from '../../CanvasTypes'
 import {
     toLocalSpace, getHandlePositions, getRotateHandlePosition, hitTest,
     rotatePoint, computeResize, normalizeDegrees
-} from '../CanvasHelpers'
+} from '../../CanvasHelpers'
 
 interface SelectToolRefs {
     zoomRef: RefObject<number>

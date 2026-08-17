@@ -1,6 +1,6 @@
 import type { RefObject } from 'react'
-import type { Renderer } from '../Render/Renderer'
-import { getBuffer } from '../BufferRegistry'
+import type { Renderer } from '../../Render/Renderer'
+import { getBuffer } from '../../BufferRegistry'
 
 interface BrushToolRefs {
     zoomRef: RefObject<number>

@@ -1,9 +1,9 @@
 import type { RefObject } from 'react'
-import type { Layer, Element, BaseElement } from '../../../types/schema'
-import type { Renderer } from '../Render/Renderer'
-import { uid } from '../../../store/editorStore'
-import { degToRad } from '../CanvasHelpers'
-import { getBuffer } from '../BufferRegistry'
+import type { Layer, Element, BaseElement } from '../../../../types/schema'
+import type { Renderer } from '../../Render/Renderer'
+import { uid } from '../../../../store/editorStore'
+import { degToRad } from '../../CanvasHelpers'
+import { getBuffer } from '../../BufferRegistry'
 
 interface RectangleSelectToolRefs {
     zoomRef: RefObject<number>

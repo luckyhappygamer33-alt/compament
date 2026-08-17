@@ -1,6 +1,6 @@
 import type { RefObject } from 'react'
-import type { Element } from '../../../types/schema'
-import { uid } from '../../../store/editorStore'
+import type { Element } from '../../../../types/schema'
+import { uid } from '../../../../store/editorStore'
 
 interface EllipseToolRefs {
     zoomRef: RefObject<number>

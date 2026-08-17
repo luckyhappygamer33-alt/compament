@@ -6,11 +6,11 @@ import { Renderer } from '../Render/Renderer'
 
 import { ViewportController } from './ViewportController'
 
-import { SelectTool } from '../Tools/SelectTool'
-import { RectangleTool } from '../Tools/RectangleTool'
-import { EllipseTool } from '../Tools/EllipseTool'
-import { RectangleSelectTool } from '../Tools/RectangleSelectTool'
-import { BrushTool } from '../Tools/BrushTool'
+import { SelectTool } from './Tools/SelectTool'
+import { RectangleTool } from './Tools/RectangleTool'
+import { EllipseTool } from './Tools/EllipseTool'
+import { RectangleSelectTool } from './Tools/RectangleSelectTool'
+import { BrushTool } from './Tools/BrushTool'
 
 interface InputRefs {
     zoomRef: RefObject<number>
