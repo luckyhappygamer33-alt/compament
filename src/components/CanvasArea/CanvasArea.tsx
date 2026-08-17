@@ -4,7 +4,7 @@ import Breadcrumb from '../Breadcrumb/Breadcrumb'
 import './CanvasArea.css'
 import { type HandleName } from './CanvasTypes'
 import { Renderer } from './Render/Renderer'
-import { InputHandler } from './InputHandler'
+import { InputHandler } from './InputHandling/InputHandler'
 
 export default function CanvasArea() {
     const canvasRef = useRef<HTMLCanvasElement>(null)
