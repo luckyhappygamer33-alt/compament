@@ -9,6 +9,7 @@ import { SelectionRenderer } from './SelectionRenderer'
 
 import { EllipseTool } from './Tools/EllipseTool'
 import { RectangleTool } from './Tools/RectangleTool'
+import { RectangleSelectTool } from './Tools/RectangleSelectTool'
 
 declare global {
     interface Window {
@@ -44,12 +45,12 @@ export class Renderer {
     private lastNonActiveLayerRefsBelow: Layer[] = []
     private lastNonActiveLayerRefsAbove: Layer[] = []
 
-    private rectSelection: { x: number, y: number, width: number, height: number } | null = null
     private imageCache = new Map<string, HTMLImageElement>()
 
     private overlayRenderer: OverlayRenderer
     private selectionRenderer = new SelectionRenderer()
 
+    private rectangleSelectTool: RectangleSelectTool
     private ellipseTool = new EllipseTool()
     private rectangleTool = new RectangleTool()
 
@@ -65,6 +66,7 @@ export class Renderer {
         this.ctx = ctx
 
         this.overlayRenderer = new OverlayRenderer(overlayCanvas)
+        this.rectangleSelectTool = new RectangleSelectTool(this.selectionRenderer)
 
         window.__renderer = this
     }
@@ -207,14 +209,7 @@ export class Renderer {
             }
         }
 
-        if (this.rectSelection) {
-            this.selectionRenderer.drawSelection(ctx, this.rectSelection, zoom, {
-                style: 'dashed',
-                color: '#ceff1a',
-                lineWidth: 1.5,
-                fill: 'rgba(206, 255, 26, 0.08)',
-            })
-        }
+        this.rectangleSelectTool.draw(ctx, zoom)
     }
 
     drawFrame() {
@@ -284,8 +279,8 @@ export class Renderer {
         this.drawElement(bufCtx, element)
     }
 
-    setRectSelection(rect: { x: number, y: number, width: number, height: number } | null) {
-        this.rectSelection = rect
+    setRectSelection(selection: { x: number, y: number, width: number, height: number } | null) {
+        this.rectangleSelectTool.setSelection(selection)
     }
 
     private getOrLoadImage(src: string): HTMLImageElement | null {
