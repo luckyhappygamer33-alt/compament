@@ -7,6 +7,8 @@ import { getBuffer } from '../BufferRegistry'
 import { OverlayRenderer } from './OverlayRenderer'
 import { SelectionRenderer } from './SelectionRenderer'
 
+import { EllipseTool } from './Tools/EllipseTool'
+
 declare global {
     interface Window {
         __renderer: Renderer
@@ -46,6 +48,8 @@ export class Renderer {
 
     private overlayRenderer: OverlayRenderer
     private selectionRenderer = new SelectionRenderer()
+
+    private ellipseTool = new EllipseTool()
 
     constructor(
         canvas: HTMLCanvasElement,
@@ -91,9 +95,7 @@ export class Renderer {
             ctx.roundRect(element.position.x, element.position.y, element.size.width, element.size.height, element.cornerRadius)
             ctx.fill()
         } else if (element.type === 'ellipse') {
-            ctx.beginPath()
-            ctx.ellipse(element.position.x + element.size.width / 2, element.position.y + element.size.height / 2, element.size.width / 2, element.size.height / 2, 0, 0, Math.PI * 2)
-            ctx.fill()
+            this.ellipseTool.draw(ctx, element)
         }
         else if (element.type === 'image') {
             const img = this.getOrLoadImage(element.src)
