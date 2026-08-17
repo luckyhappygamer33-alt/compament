@@ -10,6 +10,7 @@ import { SelectionRenderer } from './SelectionRenderer'
 import { EllipseTool } from './Tools/EllipseTool'
 import { RectangleTool } from './Tools/RectangleTool'
 import { RectangleSelectTool } from './Tools/RectangleSelectTool'
+import { SelectTool } from './Tools/SelectTool'
 
 declare global {
     interface Window {
@@ -51,6 +52,7 @@ export class Renderer {
     private selectionRenderer = new SelectionRenderer()
 
     private rectangleSelectTool: RectangleSelectTool
+    private selectTool: SelectTool
     private ellipseTool = new EllipseTool()
     private rectangleTool = new RectangleTool()
 
@@ -67,6 +69,7 @@ export class Renderer {
 
         this.overlayRenderer = new OverlayRenderer(overlayCanvas)
         this.rectangleSelectTool = new RectangleSelectTool(this.selectionRenderer)
+        this.selectTool = new SelectTool(refs, this.selectionRenderer)
 
         window.__renderer = this
     }
@@ -182,41 +185,16 @@ export class Renderer {
     private drawSelections(
         ctx: CanvasRenderingContext2D,
         layers: Layer[],
-        selectedElementId: string | null,
-        hoveredHandle: HandleName | null,
         zoom: number
     ) {
-        if (selectedElementId) {
-            for (const layer of layers) {
-                const element = layer.elements.find(e => e.id === selectedElementId)
-                if (!element) continue
-                this.selectionRenderer.drawSelection(ctx, {
-                    x: element.position.x,
-                    y: element.position.y,
-                    width: element.size.width,
-                    height: element.size.height,
-                }, zoom, {
-                    style: 'solid',
-                    color: '#7bb4f1',
-                    lineWidth: 2,
-                    padding: 10,
-                    rotation: element.rotation,
-                    handles: true,
-                    rotateHandle: true,
-                    hoveredHandle,
-                })
-                break
-            }
-        }
-
+        this.selectTool.draw(ctx, layers, zoom)
         this.rectangleSelectTool.draw(ctx, zoom)
     }
 
     drawFrame() {
         this.overlayRenderer.recordFrame()
 
-        const { panRef, zoomRef, artboardSizeRef, layersRef,
-            selectedElementIdRef, hoveredHandleRef, activeLayerIdRef } = this.refs
+        const { panRef, zoomRef, artboardSizeRef, layersRef, activeLayerIdRef } = this.refs
         const artboardSize = artboardSizeRef.current
         if (!artboardSize) return
 
@@ -258,7 +236,7 @@ export class Renderer {
         // 3. layers above active
         if (this.backgroundCompositeAbove) ctx.drawImage(this.backgroundCompositeAbove, 0, 0)
 
-        this.drawSelections(ctx, layers, selectedElementIdRef.current, hoveredHandleRef.current, zoom)
+        this.drawSelections(ctx, layers, zoom)
 
         ctx.restore()
     }
