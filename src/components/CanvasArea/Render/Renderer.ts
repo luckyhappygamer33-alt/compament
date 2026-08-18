@@ -1,14 +1,13 @@
-import type { RefObject } from 'react'
+import { type RefObject } from 'react'
 
 import type { Layer, Size, Element } from '../../../types/schema'
 import type { HandleName } from '../CanvasTypes'
-import { degToRad } from '../CanvasHelpers'
-import { getBuffer } from '../BufferRegistry'
 import { OverlayRenderer } from './OverlayRenderer'
 import { SelectionRenderer } from './SelectionRenderer'
+import { ElementRenderer } from './ElementRenderer'
 
-import { EllipseTool } from './Tools/EllipseTool'
-import { RectangleTool } from './Tools/RectangleTool'
+import { CompositeManager } from './CompositeManager'
+
 import { RectangleSelectTool } from './Tools/RectangleSelectTool'
 import { SelectTool } from './Tools/SelectTool'
 
@@ -32,29 +31,16 @@ export class Renderer {
     private canvas: HTMLCanvasElement
     private refs: RendererRefs
     private ctx: CanvasRenderingContext2D
-
     private rafId: number | null = null
-    private backgroundCompositeBelow: OffscreenCanvas | null = null
-    private backgroundCompositeAbove: OffscreenCanvas | null = null
 
-    // --- Precise invalidation tracking (replaces backgroundCompositeValid flag) ---
-    // Zustand uses immutable updates, so unchanged layer objects keep the same reference.
-    // During drag, only the active layer object changes — non-active refs stay identical.
-    // This lets us skip the expensive rebuild on every drag frame.
-    private lastActiveLayerId: string | null = null
-    private lastArtboardSize: Size | null = null
-    private lastNonActiveLayerRefsBelow: Layer[] = []
-    private lastNonActiveLayerRefsAbove: Layer[] = []
-
-    private imageCache = new Map<string, HTMLImageElement>()
+    private composite = new CompositeManager()
 
     private overlayRenderer: OverlayRenderer
+    private elementRenderer: ElementRenderer
     private selectionRenderer = new SelectionRenderer()
 
     private rectangleSelectTool: RectangleSelectTool
     private selectTool: SelectTool
-    private ellipseTool = new EllipseTool()
-    private rectangleTool = new RectangleTool()
 
     constructor(
         canvas: HTMLCanvasElement,
@@ -68,6 +54,7 @@ export class Renderer {
         this.ctx = ctx
 
         this.overlayRenderer = new OverlayRenderer(overlayCanvas)
+        this.elementRenderer = new ElementRenderer(() => this.requestFrame())
         this.rectangleSelectTool = new RectangleSelectTool(this.selectionRenderer)
         this.selectTool = new SelectTool(refs, this.selectionRenderer)
 
@@ -76,110 +63,6 @@ export class Renderer {
 
     resizeOverlay(width: number, height: number) {
         this.overlayRenderer.resize(width, height)
-    }
-
-    private drawElement(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, element: Element) {
-
-        ctx.globalAlpha = element.style.opacity
-
-        if (element.style.fill?.type === 'solid') {
-            const { r, g, b, a } = element.style.fill.color
-            ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${a})`
-        } else {
-            ctx.fillStyle = 'transparent'
-        }
-
-        const cx = element.position.x + element.size.width / 2
-        const cy = element.position.y + element.size.height / 2
-
-        ctx.save()
-        ctx.translate(cx, cy)
-        ctx.rotate(degToRad(element.rotation))
-        ctx.translate(-cx, -cy)
-
-        if (element.type === 'rectangle') {
-            this.rectangleTool.draw(ctx, element)
-        } else if (element.type === 'ellipse') {
-            this.ellipseTool.draw(ctx, element)
-        }
-        else if (element.type === 'image') {
-            const img = this.getOrLoadImage(element.src)
-            if (img) {
-                ctx.drawImage(img, element.position.x, element.position.y, element.size.width, element.size.height)
-            }
-        }
-
-        ctx.restore()
-        ctx.globalAlpha = 1
-    }
-
-    private drawLayerElements(
-        ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
-        layer: Layer,
-    ) {
-        const buffer = getBuffer(layer.id)
-        if (buffer) ctx.drawImage(buffer, 0, 0)
-        for (const element of layer.elements) {
-            this.drawElement(ctx, element)
-        }
-    }
-
-    private needsBackgroundRebuild(
-        layers: Layer[],
-        activeLayerId: string | null,
-        artboardSize: Size
-    ): boolean {
-        if (this.lastActiveLayerId !== activeLayerId) return true
-
-        if (
-            !this.lastArtboardSize ||
-            this.lastArtboardSize.width !== artboardSize.width ||
-            this.lastArtboardSize.height !== artboardSize.height
-        ) return true
-
-        const activeIndex = layers.findIndex(l => l.id === activeLayerId)
-        const below = layers.slice(activeIndex + 1)  // higher index = lower in stack
-        const above = layers.slice(0, activeIndex)   // lower index = higher in stack
-
-        if (below.length !== this.lastNonActiveLayerRefsBelow.length) return true
-        if (above.length !== this.lastNonActiveLayerRefsAbove.length) return true
-        if (below.some((l, i) => l !== this.lastNonActiveLayerRefsBelow[i])) return true
-        if (above.some((l, i) => l !== this.lastNonActiveLayerRefsAbove[i])) return true
-
-        return false
-    }
-
-    private rebuildBackgroundComposite(
-        layers: Layer[],
-        activeLayerId: string | null,
-        artboardSize: Size
-    ) {
-        const needsNew = (c: OffscreenCanvas | null) =>
-            !c || c.width !== artboardSize.width || c.height !== artboardSize.height
-
-        if (needsNew(this.backgroundCompositeBelow)) this.backgroundCompositeBelow = new OffscreenCanvas(artboardSize.width, artboardSize.height)
-        if (needsNew(this.backgroundCompositeAbove)) this.backgroundCompositeAbove = new OffscreenCanvas(artboardSize.width, artboardSize.height)
-
-        const ctxBelow = this.backgroundCompositeBelow!.getContext('2d')!
-        const ctxAbove = this.backgroundCompositeAbove!.getContext('2d')!
-        ctxBelow.clearRect(0, 0, artboardSize.width, artboardSize.height)
-        ctxAbove.clearRect(0, 0, artboardSize.width, artboardSize.height)
-
-        const activeIndex = layers.findIndex(l => l.id === activeLayerId)
-
-        // Iterate in reverse (bottom layer first) without allocating a reversed copy.
-        for (let i = layers.length - 1; i >= 0; i--) {
-            const layer = layers[i]
-            if (!layer.visible || layer.id === activeLayerId) continue
-            // below active = higher index than activeIndex
-            const target = i > activeIndex ? ctxBelow : ctxAbove
-            this.drawLayerElements(target, layer)
-        }
-
-        this.lastActiveLayerId = activeLayerId
-        this.lastArtboardSize = artboardSize
-        this.lastNonActiveLayerRefsBelow = layers.slice(activeIndex + 1)
-        this.lastNonActiveLayerRefsAbove = layers.slice(0, activeIndex)
     }
 
     private drawSelections(
@@ -220,21 +103,22 @@ export class Renderer {
         ctx.shadowBlur = 0
 
         // Only rebuild composite when something in the background actually changed.
-        if (this.needsBackgroundRebuild(layers, activeLayerId, artboardSize)) {
-            this.rebuildBackgroundComposite(layers, activeLayerId, artboardSize)
+        if (this.composite.needsRebuild(layers, activeLayerId, artboardSize)) {
+            this.composite.rebuild(layers, activeLayerId, artboardSize, this.elementRenderer)
         }
+
+        const below = this.composite.getBelow()
+        const above = this.composite.getAbove()
+        const activeLayer = layers.find(l => l.id === activeLayerId)
 
         // 1. layers below active
-        if (this.backgroundCompositeBelow) ctx.drawImage(this.backgroundCompositeBelow, 0, 0)
+        if (below) ctx.drawImage(below, 0, 0)
 
         // 2. Active layer — always fresh so in-progress edits are visible immediately
-        const activeLayer = layers.find(l => l.id === activeLayerId)
-        if (activeLayer && activeLayer.visible) {
-            this.drawLayerElements(ctx, activeLayer)
-        }
+        if (activeLayer?.visible) this.elementRenderer.drawLayer(ctx, activeLayer)
 
         // 3. layers above active
-        if (this.backgroundCompositeAbove) ctx.drawImage(this.backgroundCompositeAbove, 0, 0)
+        if (above) ctx.drawImage(above, 0, 0)
 
         this.drawSelections(ctx, layers, zoom)
 
@@ -250,26 +134,10 @@ export class Renderer {
     }
 
     bakeElement(layerId: string, element: Element): void {
-        const buffer = getBuffer(layerId)
-        if (!buffer) return
-        const bufCtx = buffer.getContext('2d')
-        if (!bufCtx) return
-        this.drawElement(bufCtx, element)
+        this.elementRenderer.bake(layerId, element)
     }
 
     setRectSelection(selection: { x: number, y: number, width: number, height: number } | null) {
         this.rectangleSelectTool.setSelection(selection)
-    }
-
-    private getOrLoadImage(src: string): HTMLImageElement | null {
-        if (this.imageCache.has(src)) return this.imageCache.get(src)!
-
-        const img = new Image()
-        img.onload = () => {
-            this.imageCache.set(src, img)
-            this.requestFrame()  // redraw once loaded
-        }
-        img.src = src
-        return null  // not ready yet — will redraw on load
     }
 }
