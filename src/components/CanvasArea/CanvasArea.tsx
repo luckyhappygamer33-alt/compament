@@ -1,10 +1,15 @@
+import './CanvasArea.css'
+
 import { useRef, useEffect, useState, forwardRef, useImperativeHandle } from 'react'
+import type { Element } from '../../types/schema'
 import { useEditorStore } from '../../store/editorStore'
 import Breadcrumb from '../Breadcrumb/Breadcrumb'
-import './CanvasArea.css'
 import { type HandleName } from './CanvasTypes'
 import { Renderer } from './Render/Renderer'
 import { InputHandler } from './InputHandling/InputHandler'
+import { RectangleTool } from './Tools/RectangleTool'
+import { EllipseTool } from './Tools/EllipseTool'
+import type { ElementTool } from './Tools/ElementTool'
 
 export interface CanvasAreaHandler {
     handleBake: () => void
@@ -67,22 +72,68 @@ const CanvasArea = forwardRef<CanvasAreaHandler>((_, ref) => {
         const overlayCanvas = overlayCanvasRef.current
         if (!canvas || !overlayCanvas) return
 
-        rendererRef.current = new Renderer(canvas, overlayCanvas, {
-            panRef, zoomRef, artboardSizeRef,
-            layersRef, selectedElementIdRef, hoveredHandleRef, activeLayerIdRef
-        })
+        const rectangleTool = new RectangleTool(
+            {
+                activeLayerIdRef,
+                panRef,
+                zoomRef,
+            },
+            {
+                addElement,
+            }
+        )
+
+        const ellipseTool = new EllipseTool(
+            {
+                activeLayerIdRef,
+                panRef,
+                zoomRef,
+            },
+            {
+                addElement,
+            }
+        )
+
+        const tools = new Map<Element['type'], ElementTool>([
+            ['rectangle', rectangleTool],
+            ['ellipse', ellipseTool],
+        ])
+
+        rendererRef.current = new Renderer(
+            canvas,
+            overlayCanvas,
+            {
+                panRef,
+                zoomRef,
+                artboardSizeRef,
+                layersRef,
+                selectedElementIdRef,
+                hoveredHandleRef,
+                activeLayerIdRef
+            },
+            tools
+        )
 
         handlerRef.current = new InputHandler(
             canvas,
             {
-                zoomRef, panRef, layersRef, selectedElementIdRef,
-                activeToolRef, activeLayerIdRef, rendererRef,
+                zoomRef,
+                panRef,
+                layersRef,
+                selectedElementIdRef,
+                activeToolRef,
+                activeLayerIdRef,
+                rendererRef,
                 hoveredHandleRef,   // shared ref — InputHandler writes, renderer reads
             },
             {
-                setZoom, setPan, updateElement, setSelectedElement,
+                setZoom,
+                setPan,
+                updateElement,
+                setSelectedElement,
                 addElement
-            }
+            },
+            tools
         )
 
         const handler = handlerRef.current

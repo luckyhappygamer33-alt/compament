@@ -1,5 +1,4 @@
 import type { Layer, Size } from '../../../types/schema'
-import type { ElementRenderer } from './ElementRenderer'
 
 export class CompositeManager {
     private below: OffscreenCanvas | null = null
@@ -10,7 +9,11 @@ export class CompositeManager {
     private lastLayerRefsBelow: Layer[] = []
     private lastLayerRefsAbove: Layer[] = []
 
-    needsRebuild(layers: Layer[], activeLayerId: string | null, artboardSize: Size): boolean {
+    needsRebuild(
+        layers: Layer[],
+        activeLayerId: string | null,
+        artboardSize: Size
+    ): boolean {
         if (this.lastActiveLayerId !== activeLayerId) return true
         if (
             !this.lastArtboardSize ||
@@ -32,7 +35,15 @@ export class CompositeManager {
         return false
     }
 
-    rebuild(layers: Layer[], activeLayerId: string | null, artboardSize: Size, elementRenderer: ElementRenderer) {
+    rebuild(
+        layers: Layer[],
+        activeLayerId: string | null,
+        artboardSize: Size,
+        drawLayer: (
+            ctx: OffscreenCanvasRenderingContext2D,
+            layer: Layer
+        ) => void
+    ) {
         const needsNew = (c: OffscreenCanvas | null) =>
             !c || c.width !== artboardSize.width || c.height !== artboardSize.height
 
@@ -50,7 +61,7 @@ export class CompositeManager {
             const layer = layers[i]
             if (!layer.visible || layer.id === activeLayerId) continue
             const target = i > activeIndex ? ctxBelow : ctxAbove
-            elementRenderer.drawLayer(target, layer)
+            drawLayer(target, layer)
         }
 
         this.lastActiveLayerId = activeLayerId

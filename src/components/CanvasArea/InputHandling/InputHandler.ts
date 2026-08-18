@@ -7,10 +7,9 @@ import { Renderer } from '../Render/Renderer'
 import { ViewportController } from './ViewportController'
 
 import { SelectTool } from './Tools/SelectTool'
-import { RectangleTool } from './Tools/RectangleTool'
-import { EllipseTool } from './Tools/EllipseTool'
 import { RectangleSelectTool } from './Tools/RectangleSelectTool'
 import { BrushTool } from './Tools/BrushTool'
+import type { ElementTool } from '../Tools/ElementTool'
 
 interface InputRefs {
     zoomRef: RefObject<number>
@@ -39,15 +38,17 @@ export class InputHandler {
     private viewportController: ViewportController
 
     private selectTool: SelectTool
-    private rectangleTool: RectangleTool
-    private ellipseTool: EllipseTool
+
+    private tools: Map<Element['type'], ElementTool>
+
     private rectangleSelectTool: RectangleSelectTool
     private brushTool: BrushTool
 
     constructor(
         canvas: HTMLCanvasElement,
         refs: InputRefs,
-        actions: InputActions
+        actions: InputActions,
+        tools: Map<Element['type'], ElementTool>
     ) {
         this.canvas = canvas
         this.refs = refs
@@ -56,8 +57,9 @@ export class InputHandler {
         this.viewportController = new ViewportController(refs, actions)
 
         this.selectTool = new SelectTool(canvas, refs, actions)
-        this.rectangleTool = new RectangleTool(refs, actions)
-        this.ellipseTool = new EllipseTool(refs, actions)
+
+        this.tools = tools
+
         this.rectangleSelectTool = new RectangleSelectTool(canvas, refs, actions)
         this.brushTool = new BrushTool(canvas, refs)
     }
@@ -96,9 +98,11 @@ export class InputHandler {
     }
 
     handleMouseClick = (e: MouseEvent) => {
-        const tool = this.refs.activeToolRef.current
-        if (tool === 'select') { this.selectTool.onClick(e); return }
-        if (tool === 'rectangle') { this.rectangleTool.onClick(e); return }
-        if (tool === 'ellipse') { this.ellipseTool.onClick(e); return }
+        const activeTool = this.refs.activeToolRef.current
+
+        if (activeTool === 'select') { this.selectTool.onClick(e); return }
+
+        const tool = this.tools.get(activeTool as Element['type'])
+        tool?.onClick?.(e)
     }
 }
