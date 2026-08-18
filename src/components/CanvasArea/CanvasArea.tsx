@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from 'react'
+import { useRef, useEffect, useState, forwardRef, useImperativeHandle } from 'react'
 import { useEditorStore } from '../../store/editorStore'
 import Breadcrumb from '../Breadcrumb/Breadcrumb'
 import './CanvasArea.css'
@@ -6,7 +6,12 @@ import { type HandleName } from './CanvasTypes'
 import { Renderer } from './Render/Renderer'
 import { InputHandler } from './InputHandling/InputHandler'
 
-export default function CanvasArea() {
+export interface CanvasAreaHandler {
+    handleBake: () => void
+}
+
+const CanvasArea = forwardRef<CanvasAreaHandler>((_, ref) => {
+
     const canvasRef = useRef<HTMLCanvasElement>(null)
     const overlayCanvasRef = useRef<HTMLCanvasElement>(null)
     const rendererRef = useRef<Renderer | null>(null)
@@ -164,19 +169,15 @@ export default function CanvasArea() {
 
     const handleBake = () => {
         if (!selectedElementId || !activeLayerId) return
-
-        // find the element
         const layer = layers.find(l => l.id === activeLayerId)
         const element = layer?.elements.find(e => e.id === selectedElementId)
         if (!element) return
-
-        // stamp pixels into buffer
         rendererRef.current?.bakeElement(activeLayerId, element)
-
-        // remove from floating elements
         deleteElement(activeLayerId, selectedElementId)
         setSelectedElement(null)
     }
+
+    useImperativeHandle(ref, () => ({ handleBake: handleBake }))
 
     return (
         <div className="canvas-area">
@@ -193,26 +194,9 @@ export default function CanvasArea() {
                         {Math.round((zoom / fitZoom) * 100)}%
                     </div>
                 )}
-                {selectedElementId && (
-                    <button
-                        onClick={handleBake}
-                        style={{
-                            position: 'absolute',
-                            top: 40,
-                            right: 12,
-                            padding: '4px 10px',
-                            background: '#414066',
-                            border: 'none',
-                            borderRadius: 4,
-                            color: '#fff',
-                            fontSize: 11,
-                            cursor: 'pointer'
-                        }}
-                    >
-                        Bake
-                    </button>
-                )}
             </div>
         </div>
     )
-}
+})
+
+export default CanvasArea

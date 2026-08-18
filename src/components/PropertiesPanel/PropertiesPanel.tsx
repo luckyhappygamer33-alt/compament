@@ -22,12 +22,14 @@ function hexToColor(hex: string, alpha = 1): Color {
     }
 }
 
-export default function PropertiesPanel() {
+export default function PropertiesPanel({ onBake }: { onBake: () => void }) {
     const layers = useEditorStore(state => state.layers)
     const selectedElementId = useEditorStore(
         state => state.selectedElementId
     )
     const updateElement = useEditorStore(state => state.updateElement)
+    const deleteElement = useEditorStore(state => state.deleteElement)
+    const setSelectedElement = useEditorStore(state => state.setSelectedElement)
 
     // Find the selected element and the layer containing it.
     let selectedElement: Element | null = null
@@ -297,6 +299,35 @@ export default function PropertiesPanel() {
                                 </div>
                             </section>
                         )}
+
+                        {/*Element Actions*/}
+                        <section className='property-group'>
+                            <div className='property-group-title'>
+                                Element Actions
+                            </div>
+                            <div className='element-actions'>
+                                <button
+                                    type='button'
+                                    className='element-action-button'
+                                    onClick={onBake}
+                                >
+                                    Bake
+                                </button>
+                                <button
+                                    type="button"
+                                    className='element-action-button'
+                                    onClick={() => {
+                                        if (!selectedElement || !selectedLayerId) return
+
+                                        deleteElement(selectedLayerId, selectedElement.id)
+
+                                        setSelectedElement(null)
+                                    }}
+                                >
+                                    Delete
+                                </button>
+                            </div>
+                        </section>
                     </div>
                 )}
             </div>

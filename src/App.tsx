@@ -2,15 +2,18 @@ import './App.css'
 import { useEditorStore } from './store/editorStore'
 import Toolbar from './components/Toolbar/Toolbar'
 import PropertiesPanel from './components/PropertiesPanel/PropertiesPanel'
-import CanvasArea from './components/CanvasArea/CanvasArea'
+import CanvasArea, { type CanvasAreaHandler } from './components/CanvasArea/CanvasArea'
 import LayersPanel from './components/LayersPanel/LayersPanel'
 import NewProjectModal from './components/NewProjectModal/NewProjectModal'
+import { useRef } from 'react'
 
 export default function App() {
     // artboardSize is null until initProject is called
     // that's our signal to show the modal
     const artboardSize = useEditorStore(state => state.artboardSize)
     const hasProject = artboardSize !== null
+
+    const canvasAreaRef = useRef<CanvasAreaHandler>(null)
 
     return (
         <div className="app">
@@ -19,8 +22,8 @@ export default function App() {
 
             <Toolbar />
             <div className="app-body">
-                <PropertiesPanel />
-                <CanvasArea />
+                <PropertiesPanel onBake={() => canvasAreaRef.current?.handleBake()} />
+                <CanvasArea ref={canvasAreaRef} />
                 <LayersPanel />
             </div>
         </div>
