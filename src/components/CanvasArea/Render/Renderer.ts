@@ -7,7 +7,6 @@ import { SelectionRenderer } from './SelectionRenderer'
 
 import { CompositeManager } from './CompositeManager'
 
-import { RectangleSelectTool } from './Tools/RectangleSelectTool'
 import type { ElementTool } from '../Tools/ElementTool'
 import type { InteractionTool } from '../Tools/InteractionTool'
 
@@ -43,8 +42,6 @@ export class Renderer {
     private elementTool: ElementTool
     private interactionTool: InteractionTool
 
-    private rectangleSelectTool: RectangleSelectTool
-
     constructor(
         canvas: HTMLCanvasElement,
         overlayCanvas: HTMLCanvasElement,
@@ -63,8 +60,6 @@ export class Renderer {
         this.elementTool = elementTool
         this.interactionTool = interactionTool
 
-        this.rectangleSelectTool = new RectangleSelectTool(this.selectionRenderer)
-
         window.__renderer = this
     }
 
@@ -79,7 +74,6 @@ export class Renderer {
         selectionRenderer: SelectionRenderer
     ) {
         this.interactionTool.draw(ctx, layers, zoom, selectionRenderer)
-        this.rectangleSelectTool.draw(ctx, zoom)
     }
 
     private drawElement(
@@ -187,14 +181,5 @@ export class Renderer {
         if (!ctx) return
 
         this.drawElement(ctx, element)
-    }
-
-    setRectSelection(selection: {
-        x: number,
-        y: number,
-        width: number,
-        height: number
-    } | null) {
-        this.rectangleSelectTool.setSelection(selection)
     }
 }

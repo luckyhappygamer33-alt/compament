@@ -20,6 +20,7 @@ import { RectangleTool } from './Tools/RectangleTool'
 import { EllipseTool } from './Tools/EllipseTool'
 import { SelectTool } from './Tools/SelectTool'
 import { BrushTool } from './Tools/BrushTool'
+import { RectangleSelectTool } from './Tools/RectangleSelectTool'
 
 export interface CanvasAreaHandler {
     handleBake: () => void
@@ -121,6 +122,20 @@ const CanvasArea = forwardRef<CanvasAreaHandler>((_, ref) => {
             },
         )
 
+        const rectangleSelectTool = new RectangleSelectTool(
+            canvas,
+            {
+                zoomRef,
+                panRef,
+                layersRef,
+                activeLayerIdRef,
+                rendererRef
+            },
+            {
+                addElement
+            }
+        )
+
         const brushTool = new BrushTool(
             canvas,
             {
@@ -133,7 +148,7 @@ const CanvasArea = forwardRef<CanvasAreaHandler>((_, ref) => {
 
         const elementTools = new Map<string, ElementTool>([
             ['rectangle', rectangleTool],
-            ['ellipse', ellipseTool],
+            ['ellipse', ellipseTool]
         ])
 
         const elementTool = new ElementToolController(
@@ -142,7 +157,8 @@ const CanvasArea = forwardRef<CanvasAreaHandler>((_, ref) => {
         )
 
         const interactionTools = new Map<string, InteractionTool>([
-            ['select', selectTool]
+            ['select', selectTool],
+            ['rectangleSelect', rectangleSelectTool]
         ])
 
         const interactionTool = new InteractionToolController(

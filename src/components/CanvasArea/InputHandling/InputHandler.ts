@@ -6,7 +6,6 @@ import { Renderer } from '../Render/Renderer'
 
 import { ViewportController } from './ViewportController'
 
-import { RectangleSelectTool } from './Tools/RectangleSelectTool'
 import type { ElementTool } from '../Tools/ElementTool'
 import type { InteractionTool } from '../Tools/InteractionTool'
 import type { DrawingTool } from '../Tools/DrawingTool'
@@ -41,8 +40,6 @@ export class InputHandler {
     private interactionTool: InteractionTool
     private drawingTool: DrawingTool
 
-    private rectangleSelectTool: RectangleSelectTool
-
     constructor(
         canvas: HTMLCanvasElement,
         refs: InputRefs,
@@ -60,8 +57,6 @@ export class InputHandler {
         this.elementTool = elementTool
         this.interactionTool = interactionTool
         this.drawingTool = drawingTool
-
-        this.rectangleSelectTool = new RectangleSelectTool(canvas, refs, actions)
     }
 
     handleWheel = (e: WheelEvent) => {
@@ -72,17 +67,13 @@ export class InputHandler {
         if (e.button === 1) this.viewportController.onMouseDown(e)  // middle mouse button  
         if (e.button === 0) this.interactionTool.onMouseDown(e)
         if (e.button === 0) this.drawingTool.onMouseDown(e)
-        if (e.button === 0 && this.refs.activeToolRef.current === 'rectangleSelect') this.rectangleSelectTool.onMouseDown(e)
     }
 
     handleMouseMove = (e: MouseEvent) => {
         this.viewportController.onMouseMove(e)
 
-        const activeTool = this.refs.activeToolRef.current
-
         this.interactionTool.onMouseMove(e)
         this.drawingTool.onMouseMove(e)
-        if (activeTool === 'rectangleSelect') this.rectangleSelectTool.onMouseMove(e)
 
     }
 
@@ -90,12 +81,8 @@ export class InputHandler {
         if (e.button === 1) this.viewportController.onMouseUp()
 
         if (e.button === 0) {
-            const activeTool = this.refs.activeToolRef.current
             this.interactionTool.onMouseUp(e)
             this.drawingTool.onMouseUp(e)
-            if (activeTool === 'rectangleSelect') {
-                this.rectangleSelectTool.onMouseUp()
-            }
         }
     }
 
