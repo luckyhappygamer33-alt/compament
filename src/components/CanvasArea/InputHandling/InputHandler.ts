@@ -37,7 +37,7 @@ export class InputHandler {
 
     private viewportController: ViewportController
 
-    private elementTools: Map<string, ElementTool>
+    private elementTool: ElementTool
     private interactionTool: InteractionTool
 
     private rectangleSelectTool: RectangleSelectTool
@@ -47,7 +47,7 @@ export class InputHandler {
         canvas: HTMLCanvasElement,
         refs: InputRefs,
         actions: InputActions,
-        elementTools: Map<string, ElementTool>,
+        elementTool: ElementTool,
         interactionTool: InteractionTool
     ) {
         this.canvas = canvas
@@ -56,7 +56,7 @@ export class InputHandler {
 
         this.viewportController = new ViewportController(refs, actions)
 
-        this.elementTools = elementTools
+        this.elementTool = elementTool
         this.interactionTool = interactionTool
 
         this.rectangleSelectTool = new RectangleSelectTool(canvas, refs, actions)
@@ -102,10 +102,6 @@ export class InputHandler {
 
     handleMouseClick = (e: MouseEvent) => {
         this.interactionTool.onClick(e)
-
-        const activeTool = this.refs.activeToolRef.current
-        const elementTool = this.elementTools.get(activeTool as Element['type'])
-
-        elementTool?.onClick?.(e)
+        this.elementTool.onClick(e)
     }
 }

@@ -5,9 +5,9 @@ type CanvasContext =
     | OffscreenCanvasRenderingContext2D
 
 export interface ElementTool {
-    readonly type: Element['type']
+    readonly type: string
 
-    onClick?(e: MouseEvent): void
+    onClick(e: MouseEvent): void
 
     draw(
         ctx: CanvasContext,

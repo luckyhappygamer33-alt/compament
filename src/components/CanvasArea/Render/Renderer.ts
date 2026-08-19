@@ -45,7 +45,7 @@ export class Renderer {
     private overlayRenderer: OverlayRenderer
     private selectionRenderer = new SelectionRenderer()
 
-    private elementTools: Map<string, ElementTool>
+    private elementTool: ElementTool
     private interactionTool: InteractionTool
 
     private rectangleSelectTool: RectangleSelectTool
@@ -54,7 +54,7 @@ export class Renderer {
         canvas: HTMLCanvasElement,
         overlayCanvas: HTMLCanvasElement,
         refs: RendererRefs,
-        elementTools: Map<string, ElementTool>,
+        elementTool: ElementTool,
         interactionTool: InteractionTool
     ) {
         this.canvas = canvas
@@ -65,8 +65,7 @@ export class Renderer {
 
         this.overlayRenderer = new OverlayRenderer(overlayCanvas)
 
-        this.elementTools = elementTools
-
+        this.elementTool = elementTool
         this.interactionTool = interactionTool
 
         this.rectangleSelectTool = new RectangleSelectTool(this.selectionRenderer)
@@ -92,17 +91,7 @@ export class Renderer {
         ctx: CanvasContext,
         element: Element
     ) {
-        const tool = this.elementTools.get(element.type)
-
-        if (!tool) {
-            console.warn(
-                `No tool registered for element type: ${element.type}`
-            )
-            return
-        }
-
-        tool.draw(ctx, element)
-
+        this.elementTool.draw(ctx, element)
     }
 
     private drawLayer = (
