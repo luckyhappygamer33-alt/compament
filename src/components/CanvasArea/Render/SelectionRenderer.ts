@@ -21,8 +21,7 @@ interface SelectionDrawOptions {
 }
 
 const HANDLE_SIZE = 8
-const ROTATE_HANDLE_RADIUS = 5
-const HANDLE_HOVER_SCALE = 1.3
+const HANDLE_HOVER_SCALE = 1.5
 
 export class SelectionRenderer {
 
@@ -61,7 +60,7 @@ export class SelectionRenderer {
     ) {
         const rotateHandle = getRotateHandlePosition(element, padding, zoom)
         const isHovered = hoveredHandle === 'rotate'
-        const handleSize = ROTATE_HANDLE_RADIUS / zoom
+        const handleSize = (HANDLE_SIZE / 2) / zoom
         const finalHandleSize = isHovered ? handleSize * HANDLE_HOVER_SCALE : handleSize
 
         ctx.strokeStyle = '#4a90d9'

@@ -8,8 +8,9 @@ import { SelectionRenderer } from './SelectionRenderer'
 import { CompositeManager } from './CompositeManager'
 
 import { RectangleSelectTool } from './Tools/RectangleSelectTool'
-import { SelectTool } from './Tools/SelectTool'
 import type { ElementTool } from '../Tools/ElementTool'
+import type { InteractionTool } from '../Tools/InteractionTool'
+
 import { getBuffer } from '../BufferRegistry'
 
 declare global {
@@ -44,19 +45,17 @@ export class Renderer {
     private overlayRenderer: OverlayRenderer
     private selectionRenderer = new SelectionRenderer()
 
-    private tools: Map<Element['type'], ElementTool>
-    // const tools = new Map<Element['type'], ElementTool>([
-    //     ['rectangle', rectangleTool],
-    //     ['ellipse', ellipseTool],
-    // ])
+    private elementTools: Map<string, ElementTool>
+    private interactionTool: InteractionTool
+
     private rectangleSelectTool: RectangleSelectTool
-    private selectTool: SelectTool
 
     constructor(
         canvas: HTMLCanvasElement,
         overlayCanvas: HTMLCanvasElement,
         refs: RendererRefs,
-        tools: Map<Element['type'], ElementTool>
+        elementTools: Map<string, ElementTool>,
+        interactionTool: InteractionTool
     ) {
         this.canvas = canvas
         this.refs = refs
@@ -66,9 +65,11 @@ export class Renderer {
 
         this.overlayRenderer = new OverlayRenderer(overlayCanvas)
 
-        this.tools = tools
+        this.elementTools = elementTools
+
+        this.interactionTool = interactionTool
+
         this.rectangleSelectTool = new RectangleSelectTool(this.selectionRenderer)
-        this.selectTool = new SelectTool(refs, this.selectionRenderer)
 
         window.__renderer = this
     }
@@ -80,9 +81,10 @@ export class Renderer {
     private drawSelections(
         ctx: CanvasRenderingContext2D,
         layers: Layer[],
-        zoom: number
+        zoom: number,
+        selectionRenderer: SelectionRenderer
     ) {
-        this.selectTool.draw(ctx, layers, zoom)
+        this.interactionTool.draw(ctx, layers, zoom, selectionRenderer)
         this.rectangleSelectTool.draw(ctx, zoom)
     }
 
@@ -90,7 +92,7 @@ export class Renderer {
         ctx: CanvasContext,
         element: Element
     ) {
-        const tool = this.tools.get(element.type)
+        const tool = this.elementTools.get(element.type)
 
         if (!tool) {
             console.warn(
@@ -123,7 +125,8 @@ export class Renderer {
         layers: Layer[],
         activeLayerId: string | null,
         artboardSize: Size,
-        zoom: number
+        zoom: number,
+        selectionRenderer: SelectionRenderer
     ) {
         const below = this.composite.getBelow()
         const above = this.composite.getAbove()
@@ -143,7 +146,7 @@ export class Renderer {
         // 3. layers above active
         if (above) ctx.drawImage(above, 0, 0)
 
-        this.drawSelections(ctx, layers, zoom)
+        this.drawSelections(ctx, layers, zoom, selectionRenderer)
     }
 
     drawFrame() {
@@ -174,7 +177,7 @@ export class Renderer {
         ctx.shadowColor = 'transparent'
         ctx.shadowBlur = 0
 
-        this.drawCanvas(ctx, layers, activeLayerId, artboardSize, zoom)
+        this.drawCanvas(ctx, layers, activeLayerId, artboardSize, zoom, this.selectionRenderer)
 
         ctx.restore()
     }

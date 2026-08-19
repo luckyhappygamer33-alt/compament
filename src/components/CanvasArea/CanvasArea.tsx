@@ -1,15 +1,20 @@
 import './CanvasArea.css'
 
 import { useRef, useEffect, useState, forwardRef, useImperativeHandle } from 'react'
-import type { Element } from '../../types/schema'
 import { useEditorStore } from '../../store/editorStore'
 import Breadcrumb from '../Breadcrumb/Breadcrumb'
 import { type HandleName } from './CanvasTypes'
+
 import { Renderer } from './Render/Renderer'
 import { InputHandler } from './InputHandling/InputHandler'
+
+import type { ElementTool } from './Tools/ElementTool'
+import type { InteractionTool } from './Tools/InteractionTool'
+
 import { RectangleTool } from './Tools/RectangleTool'
 import { EllipseTool } from './Tools/EllipseTool'
-import type { ElementTool } from './Tools/ElementTool'
+import { SelectTool } from './Tools/SelectTool'
+import { InteractionToolController } from './Tools/InteractionToolController'
 
 export interface CanvasAreaHandler {
     handleBake: () => void
@@ -94,10 +99,36 @@ const CanvasArea = forwardRef<CanvasAreaHandler>((_, ref) => {
             }
         )
 
-        const tools = new Map<Element['type'], ElementTool>([
+        const selectTool = new SelectTool(
+            canvas,
+            {
+                zoomRef,
+                panRef,
+                activeLayerIdRef,
+                layersRef,
+                selectedElementIdRef,
+                hoveredHandleRef,
+                rendererRef
+            },
+            {
+                updateElement,
+                setSelectedElement,
+            },
+        )
+
+        const elementTools = new Map<string, ElementTool>([
             ['rectangle', rectangleTool],
             ['ellipse', ellipseTool],
         ])
+
+        const interactionTool = new Map<string, InteractionTool>([
+            ['select', selectTool]
+        ])
+
+        const interactionTools = new InteractionToolController(
+            activeToolRef,
+            interactionTool
+        )
 
         rendererRef.current = new Renderer(
             canvas,
@@ -111,7 +142,8 @@ const CanvasArea = forwardRef<CanvasAreaHandler>((_, ref) => {
                 hoveredHandleRef,
                 activeLayerIdRef
             },
-            tools
+            elementTools,
+            interactionTools
         )
 
         handlerRef.current = new InputHandler(
@@ -133,7 +165,8 @@ const CanvasArea = forwardRef<CanvasAreaHandler>((_, ref) => {
                 setSelectedElement,
                 addElement
             },
-            tools
+            elementTools,
+            interactionTools
         )
 
         const handler = handlerRef.current

@@ -6,10 +6,10 @@ import { Renderer } from '../Render/Renderer'
 
 import { ViewportController } from './ViewportController'
 
-import { SelectTool } from './Tools/SelectTool'
 import { RectangleSelectTool } from './Tools/RectangleSelectTool'
 import { BrushTool } from './Tools/BrushTool'
 import type { ElementTool } from '../Tools/ElementTool'
+import type { InteractionTool } from '../Tools/InteractionTool'
 
 interface InputRefs {
     zoomRef: RefObject<number>
@@ -37,9 +37,8 @@ export class InputHandler {
 
     private viewportController: ViewportController
 
-    private selectTool: SelectTool
-
-    private tools: Map<Element['type'], ElementTool>
+    private elementTools: Map<string, ElementTool>
+    private interactionTool: InteractionTool
 
     private rectangleSelectTool: RectangleSelectTool
     private brushTool: BrushTool
@@ -48,7 +47,8 @@ export class InputHandler {
         canvas: HTMLCanvasElement,
         refs: InputRefs,
         actions: InputActions,
-        tools: Map<Element['type'], ElementTool>
+        elementTools: Map<string, ElementTool>,
+        interactionTool: InteractionTool
     ) {
         this.canvas = canvas
         this.refs = refs
@@ -56,9 +56,8 @@ export class InputHandler {
 
         this.viewportController = new ViewportController(refs, actions)
 
-        this.selectTool = new SelectTool(canvas, refs, actions)
-
-        this.tools = tools
+        this.elementTools = elementTools
+        this.interactionTool = interactionTool
 
         this.rectangleSelectTool = new RectangleSelectTool(canvas, refs, actions)
         this.brushTool = new BrushTool(canvas, refs)
@@ -70,39 +69,43 @@ export class InputHandler {
 
     handleMouseDown = (e: MouseEvent) => {
         if (e.button === 1) this.viewportController.onMouseDown(e)  // middle mouse button  
-        if (e.button === 0 && this.refs.activeToolRef.current === 'select') this.selectTool.onMouseDown(e)
+        if (e.button === 0) this.interactionTool.onMouseDown(e)
         if (e.button === 0 && this.refs.activeToolRef.current === 'brush') this.brushTool.onMouseDown(e)
         if (e.button === 0 && this.refs.activeToolRef.current === 'rectangleSelect') this.rectangleSelectTool.onMouseDown(e)
     }
 
     handleMouseMove = (e: MouseEvent) => {
-        const tool = this.refs.activeToolRef.current
         this.viewportController.onMouseMove(e)
-        if (tool === 'select') this.selectTool.onMouseMove(e)
-        if (tool === 'rectangleSelect') this.rectangleSelectTool.onMouseMove(e)
-        if (tool === 'brush') this.brushTool.onMouseMove(e)
+
+        const activeTool = this.refs.activeToolRef.current
+
+        this.interactionTool.onMouseMove(e)
+        if (activeTool === 'rectangleSelect') this.rectangleSelectTool.onMouseMove(e)
+        if (activeTool === 'brush') this.brushTool.onMouseMove(e)
 
     }
 
     handleMouseUp = (e: MouseEvent) => {
         if (e.button === 1) this.viewportController.onMouseUp()
+
         if (e.button === 0) {
-            this.selectTool.onMouseUp()
-            if (this.refs.activeToolRef.current === 'rectangleSelect') {
+            const activeTool = this.refs.activeToolRef.current
+            this.interactionTool.onMouseUp(e)
+            if (activeTool === 'rectangleSelect') {
                 this.rectangleSelectTool.onMouseUp()
             }
-            if (this.refs.activeToolRef.current === 'brush') {
+            if (activeTool === 'brush') {
                 this.brushTool.onMouseUp()
             }
         }
     }
 
     handleMouseClick = (e: MouseEvent) => {
+        this.interactionTool.onClick(e)
+
         const activeTool = this.refs.activeToolRef.current
+        const elementTool = this.elementTools.get(activeTool as Element['type'])
 
-        if (activeTool === 'select') { this.selectTool.onClick(e); return }
-
-        const tool = this.tools.get(activeTool as Element['type'])
-        tool?.onClick?.(e)
+        elementTool?.onClick?.(e)
     }
 }
