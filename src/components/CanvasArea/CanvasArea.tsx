@@ -21,6 +21,7 @@ import { EllipseTool } from './Tools/EllipseTool'
 import { SelectTool } from './Tools/SelectTool'
 import { BrushTool } from './Tools/BrushTool'
 import { RectangleSelectTool } from './Tools/RectangleSelectTool'
+import { ImageTool } from './Tools/ImageTool'
 
 export interface CanvasAreaHandler {
     handleBake: () => void
@@ -105,6 +106,10 @@ const CanvasArea = forwardRef<CanvasAreaHandler>((_, ref) => {
             }
         )
 
+        const imageTool = new ImageTool({
+            rendererRef
+        })
+
         const selectTool = new SelectTool(
             canvas,
             {
@@ -148,7 +153,8 @@ const CanvasArea = forwardRef<CanvasAreaHandler>((_, ref) => {
 
         const elementTools = new Map<string, ElementTool>([
             ['rectangle', rectangleTool],
-            ['ellipse', ellipseTool]
+            ['ellipse', ellipseTool],
+            ['image', imageTool]
         ])
 
         const elementTool = new ElementToolController(

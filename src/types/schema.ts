@@ -59,7 +59,7 @@ export interface EllipseElement extends BaseElement {
     type: 'ellipse'
 }
 
-interface ImageElement extends BaseElement {
+export interface ImageElement extends BaseElement {
     type: 'image'
     src: string  // data URL or local file reference
 }
