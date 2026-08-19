@@ -64,7 +64,7 @@ export class ImageTool implements ElementTool {
         ctx.restore()
     }
 
-    onClick(e: MouseEvent): void {
+    onClick(_e: MouseEvent): void {
         //empty, needed due to interface
     }
 }
