@@ -1,6 +1,7 @@
 import type { RefObject } from 'react'
-import type { Renderer } from '../../Render/Renderer'
-import { getBuffer } from '../../BufferRegistry'
+import type { Renderer } from '../Render/Renderer'
+import { getBuffer } from '../BufferRegistry'
+import type { DrawingTool } from './DrawingTool'
 
 interface BrushToolRefs {
     zoomRef: RefObject<number>
@@ -9,7 +10,9 @@ interface BrushToolRefs {
     rendererRef: RefObject<Renderer | null>
 }
 
-export class BrushTool {
+export class BrushTool implements DrawingTool {
+    readonly type = 'brush'
+
     private canvas: HTMLCanvasElement
     private refs: BrushToolRefs
 

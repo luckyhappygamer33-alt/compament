@@ -10,12 +10,16 @@ import { InputHandler } from './InputHandling/InputHandler'
 
 import type { ElementTool } from './Tools/ElementTool'
 import type { InteractionTool } from './Tools/InteractionTool'
+import type { DrawingTool } from './Tools/DrawingTool'
+
+import { InteractionToolController } from './Tools/InteractionToolController'
+import { ElementToolController } from './Tools/ElementToolController'
+import { DrawingToolController } from './Tools/DrawingToolController'
 
 import { RectangleTool } from './Tools/RectangleTool'
 import { EllipseTool } from './Tools/EllipseTool'
 import { SelectTool } from './Tools/SelectTool'
-import { InteractionToolController } from './Tools/InteractionToolController'
-import { ElementToolController } from './Tools/ElementToolController'
+import { BrushTool } from './Tools/BrushTool'
 
 export interface CanvasAreaHandler {
     handleBake: () => void
@@ -117,6 +121,16 @@ const CanvasArea = forwardRef<CanvasAreaHandler>((_, ref) => {
             },
         )
 
+        const brushTool = new BrushTool(
+            canvas,
+            {
+                zoomRef,
+                panRef,
+                activeLayerIdRef,
+                rendererRef
+            }
+        )
+
         const elementTools = new Map<string, ElementTool>([
             ['rectangle', rectangleTool],
             ['ellipse', ellipseTool],
@@ -134,6 +148,15 @@ const CanvasArea = forwardRef<CanvasAreaHandler>((_, ref) => {
         const interactionTool = new InteractionToolController(
             activeToolRef,
             interactionTools
+        )
+
+        const drawingTools = new Map<string, DrawingTool>([
+            ['brush', brushTool]
+        ])
+
+        const drawingTool = new DrawingToolController(
+            activeToolRef,
+            drawingTools
         )
 
         rendererRef.current = new Renderer(
@@ -172,7 +195,8 @@ const CanvasArea = forwardRef<CanvasAreaHandler>((_, ref) => {
                 addElement
             },
             elementTool,
-            interactionTool
+            interactionTool,
+            drawingTool
         )
 
         const handler = handlerRef.current

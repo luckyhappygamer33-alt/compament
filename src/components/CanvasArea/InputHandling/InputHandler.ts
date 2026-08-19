@@ -7,9 +7,9 @@ import { Renderer } from '../Render/Renderer'
 import { ViewportController } from './ViewportController'
 
 import { RectangleSelectTool } from './Tools/RectangleSelectTool'
-import { BrushTool } from './Tools/BrushTool'
 import type { ElementTool } from '../Tools/ElementTool'
 import type { InteractionTool } from '../Tools/InteractionTool'
+import type { DrawingTool } from '../Tools/DrawingTool'
 
 interface InputRefs {
     zoomRef: RefObject<number>
@@ -39,16 +39,17 @@ export class InputHandler {
 
     private elementTool: ElementTool
     private interactionTool: InteractionTool
+    private drawingTool: DrawingTool
 
     private rectangleSelectTool: RectangleSelectTool
-    private brushTool: BrushTool
 
     constructor(
         canvas: HTMLCanvasElement,
         refs: InputRefs,
         actions: InputActions,
         elementTool: ElementTool,
-        interactionTool: InteractionTool
+        interactionTool: InteractionTool,
+        drawingTool: DrawingTool
     ) {
         this.canvas = canvas
         this.refs = refs
@@ -58,9 +59,9 @@ export class InputHandler {
 
         this.elementTool = elementTool
         this.interactionTool = interactionTool
+        this.drawingTool = drawingTool
 
         this.rectangleSelectTool = new RectangleSelectTool(canvas, refs, actions)
-        this.brushTool = new BrushTool(canvas, refs)
     }
 
     handleWheel = (e: WheelEvent) => {
@@ -70,7 +71,7 @@ export class InputHandler {
     handleMouseDown = (e: MouseEvent) => {
         if (e.button === 1) this.viewportController.onMouseDown(e)  // middle mouse button  
         if (e.button === 0) this.interactionTool.onMouseDown(e)
-        if (e.button === 0 && this.refs.activeToolRef.current === 'brush') this.brushTool.onMouseDown(e)
+        if (e.button === 0) this.drawingTool.onMouseDown(e)
         if (e.button === 0 && this.refs.activeToolRef.current === 'rectangleSelect') this.rectangleSelectTool.onMouseDown(e)
     }
 
@@ -80,8 +81,8 @@ export class InputHandler {
         const activeTool = this.refs.activeToolRef.current
 
         this.interactionTool.onMouseMove(e)
+        this.drawingTool.onMouseMove(e)
         if (activeTool === 'rectangleSelect') this.rectangleSelectTool.onMouseMove(e)
-        if (activeTool === 'brush') this.brushTool.onMouseMove(e)
 
     }
 
@@ -91,11 +92,9 @@ export class InputHandler {
         if (e.button === 0) {
             const activeTool = this.refs.activeToolRef.current
             this.interactionTool.onMouseUp(e)
+            this.drawingTool.onMouseUp(e)
             if (activeTool === 'rectangleSelect') {
                 this.rectangleSelectTool.onMouseUp()
-            }
-            if (activeTool === 'brush') {
-                this.brushTool.onMouseUp()
             }
         }
     }
