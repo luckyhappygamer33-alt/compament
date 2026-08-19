@@ -3,10 +3,7 @@ import type { Element, RectangleElement } from '../../../types/schema'
 import { uid } from '../../../store/editorStore'
 import { beginElement, endElement } from '../Render/ElementRenderHelpers'
 import type { ElementTool } from './ElementTool'
-
-type CanvasContext =
-    | CanvasRenderingContext2D
-    | OffscreenCanvasRenderingContext2D
+import type { CanvasContext } from '../CanvasTypes'
 
 interface RectangleToolRefs {
     activeLayerIdRef: RefObject<string | null>

@@ -1,8 +1,5 @@
 import type { Element } from '../../../types/schema'
-
-type CanvasContext =
-    | CanvasRenderingContext2D
-    | OffscreenCanvasRenderingContext2D
+import type { CanvasContext } from '../CanvasTypes'
 
 export interface ElementTool {
     readonly type: string

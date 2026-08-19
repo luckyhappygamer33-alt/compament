@@ -1,11 +1,8 @@
 import type { RefObject } from 'react'
 
 import type { Element } from '../../../types/schema'
+import type { CanvasContext } from '../CanvasTypes'
 import type { ElementTool } from './ElementTool'
-
-type CanvasContext =
-    | CanvasRenderingContext2D
-    | OffscreenCanvasRenderingContext2D
 
 export class ElementToolController implements ElementTool {
     readonly type = 'element'

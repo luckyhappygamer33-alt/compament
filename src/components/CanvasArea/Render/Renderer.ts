@@ -1,7 +1,7 @@
 import { type RefObject } from 'react'
 
 import type { Layer, Size, Element } from '../../../types/schema'
-import type { HandleName } from '../CanvasTypes'
+import type { HandleName, CanvasContext } from '../CanvasTypes'
 import { OverlayRenderer } from './OverlayRenderer'
 import { SelectionRenderer } from './SelectionRenderer'
 
@@ -18,11 +18,6 @@ declare global {
         __renderer: Renderer
     }
 }
-
-type CanvasContext =
-    | CanvasRenderingContext2D
-    | OffscreenCanvasRenderingContext2D
-
 
 interface RendererRefs {
     panRef: RefObject<{ x: number; y: number }>

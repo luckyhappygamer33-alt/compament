@@ -1,9 +1,6 @@
 import type { Element } from '../../../types/schema'
 import { degToRad } from '../CanvasHelpers'
-
-type CanvasContext =
-    | CanvasRenderingContext2D
-    | OffscreenCanvasRenderingContext2D
+import type { CanvasContext } from '../CanvasTypes'
 
 export function beginElement(
     ctx: CanvasContext,
