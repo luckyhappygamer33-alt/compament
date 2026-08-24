@@ -1,6 +1,8 @@
 import './PropertiesPanel.css'
 import { useEditorStore } from '../../store/editorStore'
 import type { Color, Element } from '../../types/schema'
+import { buildMasterPropertiesObject } from './MasterPropertiesObjectBuilder'
+import { resolvePropertyStates } from './PropertyStatesResolver'
 
 function colorToHex(color: Color): string {
     const toHex = (value: number) =>
@@ -24,12 +26,24 @@ function hexToColor(hex: string, alpha = 1): Color {
 
 export default function PropertiesPanel({ onBake }: { onBake: () => void }) {
     const layers = useEditorStore(state => state.layers)
-    const selectedElementId = useEditorStore(
-        state => state.selectedElementId
-    )
+    const selectedElementId = useEditorStore(state => state.selectedElementId)
+    const selectedElementIds = useEditorStore(state => state.selectedElementIds)
     const updateElement = useEditorStore(state => state.updateElement)
     const deleteElement = useEditorStore(state => state.deleteElement)
     const setSelectedElement = useEditorStore(state => state.setSelectedElement)
+
+    const selectedElementIdsSet = new Set(selectedElementIds)
+
+    const selectedElements = layers.flatMap(layer =>
+        layer.elements.filter(element =>
+            selectedElementIdsSet.has(element.id)
+        )
+    )
+
+    const masterPropertiesObject = buildMasterPropertiesObject(selectedElements)
+    const propertyStates = resolvePropertyStates(selectedElements, masterPropertiesObject)
+
+    console.log('propertyStates:', propertyStates)
 
     // Find the selected element and the layer containing it.
     let selectedElement: Element | null = null
