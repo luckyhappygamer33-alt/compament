@@ -24,6 +24,7 @@ interface SelectToolRefs {
     activeLayerIdRef: RefObject<string | null>
     layersRef: RefObject<Layer[]>
     selectedElementIdRef: RefObject<string | null>
+    selectedElementIdsRef: RefObject<string[]>
     hoveredHandleRef: RefObject<HandleName | null>
     rendererRef: RefObject<Renderer | null>
 }
@@ -36,9 +37,17 @@ interface SelectToolActions {
     ) => void
 
     setSelectedElement: (id: string | null) => void
+    setSelectedElements: (ids: string[]) => void
+}
+
+interface DragStartPositions {
+    layerId: string,
+    x: number,
+    y: number
 }
 
 const HANDLE_SIZE = 10
+const SELECTION_PADDING = 10
 
 export class SelectTool implements InteractionTool {
     readonly type = 'select'
@@ -56,7 +65,7 @@ export class SelectTool implements InteractionTool {
     private hoveredHandle: HandleName | null = null
 
     private dragStartMouse = { x: 0, y: 0 }
-    private dragStartPos = { x: 0, y: 0 }
+    private dragStartPositions = new Map<string, DragStartPositions>()
 
     private resizeStartMouse = { x: 0, y: 0 }
     private resizeStartBounds = {
@@ -85,24 +94,35 @@ export class SelectTool implements InteractionTool {
         const worldX = (e.offsetX - this.refs.panRef.current.x) / this.refs.zoomRef.current
         const worldY = (e.offsetY - this.refs.panRef.current.y) / this.refs.zoomRef.current
 
-        const selected = this.refs.selectedElementIdRef.current
         const layers = this.refs.layersRef.current
 
-        if (!selected) return
+        const selectedIds = this.refs.selectedElementIdsRef.current
+
+        //multi-select
+        if (selectedIds?.length === 0) return
+        if (selectedIds.length > 1) {
+            if (this.pointHitsSelectedElements(worldX, worldY, selectedIds)) {
+                this.startDrag(worldX, worldY, selectedIds)
+            }
+            return
+        }
+
+        //single-select
+        const selectedId = selectedIds[0]
 
         const hitSize = HANDLE_SIZE / this.refs.zoomRef.current
 
         for (const layer of layers) {
             if (layer.locked) continue
 
-            const element = layer.elements.find(el => el.id === selected)
+            const element = layer.elements.find(el => el.id === selectedId)
 
             if (!element) continue
 
             const local = toLocalSpace(worldX, worldY, element)
 
             //rotate handle
-            const rotateHandle = getRotateHandlePosition(element, 10, this.refs.zoomRef.current)
+            const rotateHandle = getRotateHandlePosition(element, SELECTION_PADDING, this.refs.zoomRef.current)
 
             const rotateHandleHitSize = HANDLE_SIZE / this.refs.zoomRef.current
             if (
@@ -123,7 +143,7 @@ export class SelectTool implements InteractionTool {
 
             //transform handles
             for (
-                const handle of getHandlePositions(element, 10)
+                const handle of getHandlePositions(element, SELECTION_PADDING)
             ) {
                 if (
                     local.x >= handle.x - hitSize / 2 &&
@@ -152,25 +172,23 @@ export class SelectTool implements InteractionTool {
             }
 
             if (hitTest(element, worldX, worldY)) {
-                this.isDragging = true
-
-                this.dragStartMouse = {
-                    x: worldX,
-                    y: worldY
-                }
-
-                this.dragStartPos = { ...element.position }
+                this.startDrag(worldX, worldY, selectedIds)
             }
 
             return
-
         }
     }
 
     private detectHandleHover(e: MouseEvent) {
-        const selected = this.refs.selectedElementIdRef.current
+        const selectedIds = this.refs.selectedElementIdsRef.current
 
-        if (!selected || this.isDragging) return
+        //multi-select has no handles
+        if (selectedIds.length !== 1 || this.isDragging) {
+            this.clearHandlerHover()
+            return
+        }
+
+        const selectedId = selectedIds[0]
 
         const worldX = (e.offsetX - this.refs.panRef.current.x) / this.refs.zoomRef.current
         const worldY = (e.offsetY - this.refs.panRef.current.y) / this.refs.zoomRef.current
@@ -179,13 +197,13 @@ export class SelectTool implements InteractionTool {
         let found: HandleName | null = null
 
         for (const layer of this.refs.layersRef.current) {
-            const element = layer.elements.find(el => el.id === selected)
+            const element = layer.elements.find(el => el.id === selectedId)
 
             if (!element) continue
 
             const local = toLocalSpace(worldX, worldY, element)
 
-            for (const handle of getHandlePositions(element, 10)) {
+            for (const handle of getHandlePositions(element, SELECTION_PADDING)) {
                 if (
                     local.x >= handle.x - handleHitSize / 2 &&
                     local.x <= handle.x + handleHitSize / 2 &&
@@ -197,14 +215,13 @@ export class SelectTool implements InteractionTool {
                 }
             }
 
-            const rotateHandle = getRotateHandlePosition(element, 10, this.refs.zoomRef.current)
-            const rotateHandleHitSize = HANDLE_SIZE / this.refs.zoomRef.current
+            const rotateHandle = getRotateHandlePosition(element, SELECTION_PADDING, this.refs.zoomRef.current)
 
             if (
-                local.x >= rotateHandle.x - rotateHandleHitSize / 2 &&
-                local.x <= rotateHandle.x + rotateHandleHitSize / 2 &&
-                local.y >= rotateHandle.y - rotateHandleHitSize / 2 &&
-                local.y <= rotateHandle.y + rotateHandleHitSize / 2
+                local.x >= rotateHandle.x - handleHitSize / 2 &&
+                local.x <= rotateHandle.x + handleHitSize / 2 &&
+                local.y >= rotateHandle.y - handleHitSize / 2 &&
+                local.y <= rotateHandle.y + handleHitSize / 2
             ) {
                 found = 'rotate'
             }
@@ -221,6 +238,36 @@ export class SelectTool implements InteractionTool {
         this.refs.rendererRef.current?.requestFrame()
     }
 
+    private clearHandlerHover() {
+        if (this.hoveredHandle === null) return
+
+        this.hoveredHandle = null
+        this.refs.hoveredHandleRef.current = null
+        this.canvas.style.cursor = 'default'
+
+        this.refs.rendererRef.current?.requestFrame()
+    }
+
+    private pointHitsSelectedElements(
+        x: number,
+        y: number,
+        selectedIds: string[]
+    ) {
+        const selectedSet = new Set(selectedIds)
+
+        for (const layer of this.refs.layersRef.current) {
+            if (!layer.visible || layer.locked) continue
+
+            for (const element of layer.elements) {
+                if (selectedSet.has(element.id) && hitTest(element, x, y)) {
+                    return true
+                }
+            }
+        }
+
+        return false
+    }
+
 
     onMouseMove(e: MouseEvent) {
         this.detectHandleHover(e)
@@ -232,11 +279,12 @@ export class SelectTool implements InteractionTool {
         if (this.isRotating) this.applyRotate(e)
     }
 
-    onMouseUp() {
+    onMouseUp(_e: MouseEvent) {
         this.isDragging = false
         this.isResizing = false
         this.isRotating = false
         this.activeHandle = null
+        this.dragStartPositions.clear()
     }
 
     onClick(e: MouseEvent) {
@@ -250,7 +298,6 @@ export class SelectTool implements InteractionTool {
 
     private handleSelectClick(e: MouseEvent) {
         const worldX = (e.offsetX - this.refs.panRef.current.x) / this.refs.zoomRef.current
-
         const worldY = (e.offsetY - this.refs.panRef.current.y) / this.refs.zoomRef.current
 
         const hits: string[] = []
@@ -260,25 +307,50 @@ export class SelectTool implements InteractionTool {
             if (layer.id !== this.refs.activeLayerIdRef.current) continue
 
             for (let i = layer.elements.length - 1; i >= 0; i--) {
-                if (hitTest(layer.elements[i], worldX, worldY)
+                const element = layer.elements[i]
+                if (hitTest(element, worldX, worldY)
                 ) {
-                    hits.push(layer.elements[i].id)
+                    hits.push(element.id)
                 }
             }
         }
 
+        const selectedIds = this.refs.selectedElementIdsRef.current
+
+        //empty click
         if (hits.length === 0) {
-            this.actions.setSelectedElement(null)
+            if (!e.shiftKey) this.actions.setSelectedElements([])
             return
         }
 
+        //shift-click
+        if (e.shiftKey) {
+            const clickedId = hits[0]
+
+            if (selectedIds.includes(clickedId)) {
+                this.actions.setSelectedElements(selectedIds.filter(id => id !== clickedId))
+            } else {
+                this.actions.setSelectedElements([...selectedIds, clickedId])
+            }
+            return
+        }
+
+        //normal click
         if (hits.length === 1) {
-            this.actions.setSelectedElement(hits[0])
+            this.actions.setSelectedElements([hits[0]])
             return
         }
 
-        const currentIndex = hits.indexOf(this.refs.selectedElementIdRef.current ?? '')
-        this.actions.setSelectedElement(hits[(currentIndex + 1) % hits.length])
+        //click-cycling (if single-select)
+        if (selectedIds.length === 1) {
+            const currentIndex = hits.indexOf(selectedIds[0])
+
+            this.actions.setSelectedElements([hits[(currentIndex + 1) % hits.length]])
+
+            return
+        }
+
+        this.actions.setSelectedElements([hits[0]])
     }
 
     private getWorldPosition(e: MouseEvent) {
@@ -287,6 +359,40 @@ export class SelectTool implements InteractionTool {
         return {
             x: (e.clientX - rect.left - this.refs.panRef.current.x) / this.refs.zoomRef.current,
             y: (e.clientY - rect.top - this.refs.panRef.current.y) / this.refs.zoomRef.current
+        }
+    }
+
+    private startDrag(
+        worldX: number,
+        worldY: number,
+        selectedIds: string[]
+    ) {
+        this.isDragging = true
+
+        this.dragStartMouse = {
+            x: worldX,
+            y: worldY
+        }
+
+        this.dragStartPositions.clear()
+
+        const selectedSet = new Set(selectedIds)
+
+        for (const layer of this.refs.layersRef.current) {
+            if (layer.locked) continue
+
+            for (const element of layer.elements) {
+                if (!selectedSet.has(element.id)) continue
+
+                this.dragStartPositions.set(
+                    element.id,
+                    {
+                        layerId: layer.id,
+                        x: element.position.x,
+                        y: element.position.y
+                    }
+                )
+            }
         }
     }
 
@@ -299,30 +405,22 @@ export class SelectTool implements InteractionTool {
 
         const dy = worldY - this.dragStartMouse.y
 
-        const selected = this.refs.selectedElementIdRef.current
 
-        if (!selected) return
-
-        for (const layer of this.refs.layersRef.current) {
-            const element = layer.elements.find(
-                el => el.id === selected
-            )
-
-            if (!element) continue
+        for (const [elementId, start] of this.dragStartPositions) {
 
             this.actions.updateElement(
-                layer.id,
-                selected,
+                start.layerId,
+                elementId,
                 {
                     position: {
-                        x: this.dragStartPos.x + dx,
-                        y: this.dragStartPos.y + dy
+                        x: start.x + dx,
+                        y: start.y + dy
                     }
                 }
             )
-
-            return
         }
+
+        this.refs.rendererRef.current?.requestFrame()
     }
 
     private applyResize(e: MouseEvent) {
@@ -334,12 +432,13 @@ export class SelectTool implements InteractionTool {
 
         const dx = worldX - this.resizeStartMouse.x
         const dy = worldY - this.resizeStartMouse.y
-        const selected = this.refs.selectedElementIdRef.current
+        const selectedIds = this.refs.selectedElementIdsRef.current
 
-        if (!selected) return
+        if (selectedIds.length !== 1) return
+        const selectedId = selectedIds[0]
 
         for (const layer of this.refs.layersRef.current) {
-            const element = layer.elements.find(el => el.id === selected)
+            const element = layer.elements.find(el => el.id === selectedId)
 
             if (!element) continue
 
@@ -348,7 +447,7 @@ export class SelectTool implements InteractionTool {
 
             this.actions.updateElement(
                 layer.id,
-                selected,
+                selectedId,
                 {
                     position: {
                         x: result.x,
@@ -370,12 +469,13 @@ export class SelectTool implements InteractionTool {
 
         const { x: worldX, y: worldY } = this.getWorldPosition(e)
 
-        const selected = this.refs.selectedElementIdRef.current
+        const selectedIds = this.refs.selectedElementIdsRef.current
 
-        if (!selected) return
+        if (selectedIds.length !== 1) return
+        const selectedId = selectedIds[0]
 
         for (const layer of this.refs.layersRef.current) {
-            const element = layer.elements.find(el => el.id === selected)
+            const element = layer.elements.find(el => el.id === selectedId)
 
             if (!element) continue
 
@@ -386,7 +486,7 @@ export class SelectTool implements InteractionTool {
 
             this.actions.updateElement(
                 layer.id,
-                selected,
+                selectedId,
                 {
                     rotation: normalizeDegrees(this.rotateStartElementAngle + delta)
                 }
@@ -402,37 +502,40 @@ export class SelectTool implements InteractionTool {
         zoom: number,
         selectionRenderer: SelectionRenderer
     ) {
-        const selectedElementId = this.refs.selectedElementIdRef.current
+        const selectedIds = this.refs.selectedElementIdsRef.current
+        if (selectedIds.length === 0) return
+
+        const selectedSet = new Set(selectedIds)
+        const isSingle = selectedIds.length === 1
         const hoveredHandle = this.refs.hoveredHandleRef.current
 
-        if (!selectedElementId) return
 
         for (const layer of layers) {
-            const element = layer.elements.find(el => el.id === selectedElementId)
-            if (!element) continue
+            for (const element of layer.elements) {
+                if (!selectedSet.has(element.id)) continue
 
-            selectionRenderer.drawSelection(
-                ctx,
-                {
-                    x: element.position.x,
-                    y: element.position.y,
-                    width: element.size.width,
-                    height: element.size.height
-                },
-                zoom,
-                {
-                    style: 'solid',
-                    color: '#7bb4f1',
-                    lineWidth: 2,
-                    padding: 10,
-                    rotation: element.rotation,
-                    handles: true,
-                    rotateHandle: true,
-                    hoveredHandle
-                }
-            )
+                selectionRenderer.drawSelection(
+                    ctx,
+                    {
+                        x: element.position.x,
+                        y: element.position.y,
+                        width: element.size.width,
+                        height: element.size.height
+                    },
+                    zoom,
+                    {
+                        style: 'solid',
+                        color: '#7bb4f1',
+                        lineWidth: 2,
+                        padding: SELECTION_PADDING,
+                        rotation: element.rotation,
+                        handles: isSingle,
+                        rotateHandle: isSingle,
+                        hoveredHandle
+                    }
+                )
 
-            return
+            }
         }
     }
 }

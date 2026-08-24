@@ -51,7 +51,6 @@ export class ViewportController {
     }
 
     onMouseDown(e: MouseEvent) {
-        console.log("start")
         e.preventDefault()
         this.isPanning = true
 

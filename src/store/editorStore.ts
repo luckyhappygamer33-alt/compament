@@ -47,16 +47,17 @@ interface EditorStore {
     activeLayerId: string | null
 
     // ID of the currently selected element on the canvas (null = nothing selected)
-    selectedElementId: string | null
+    selectedElementId: string | null,
+    selectedElementIds: string[],
 
     activeTool: Tool
 
     // ---- ACTIONS ----
 
-    // Project
+    //Project
     initProject: (width: number, height: number) => void
 
-    // Layers
+    //Layers
     addLayer: () => void
     moveLayer: (id: string, direction: 'up' | 'down') => void
     deleteLayer: (id: string) => void
@@ -66,13 +67,17 @@ interface EditorStore {
     toggleLayerVisibility: (id: string) => void
     toggleLayerLock: (id: string) => void
 
+    //Tools
     setActiveTool: (tool: Tool) => void
 
-    // Elements
+    //Elements
     addElement: (layerId: string, element: Element) => void
     updateElement: (layerId: string, elementId: string, changes: Partial<Element>) => void
+    updateSelectedElements: (updater: (element: Element) => Element) => void
     deleteElement: (layerId: string, elementId: string) => void
+    deleteSelectedElements: () => void
     setSelectedElement: (id: string | null) => void
+    setSelectedElements: (ids: string[]) => void
 }
 
 // ----------------------------------------------------------------
@@ -88,6 +93,7 @@ export const useEditorStore = create<EditorStore>()((set, get) => ({
     layers: [],
     activeLayerId: null,
     selectedElementId: null,
+    selectedElementIds: [],
     activeTool: 'select',
 
     // ---- ACTIONS ----
@@ -258,19 +264,88 @@ export const useEditorStore = create<EditorStore>()((set, get) => ({
             ),
         })),
 
+    updateSelectedElements: updater =>
+        set(state => {
+            if (state.selectedElementIds.length === 0) {
+                return state
+            }
+
+            const selectedSet = new Set(state.selectedElementIds)
+
+            return {
+                layers: state.layers.map(layer => ({
+                    ...layer,
+                    elements: layer.elements.map(element => selectedSet.has(element.id) ? updater(element) : element)
+                }))
+            }
+        }),
+
     // Remove an element from a layer
     deleteElement: (layerId, elementId) =>
-        set(state => ({
-            layers: state.layers.map(l =>
-                l.id === layerId
-                    ? { ...l, elements: l.elements.filter(e => e.id !== elementId) }
-                    : l
-            ),
-        })),
+        set(state => {
+            const selectedElementIds = state.selectedElementIds.filter(id => id !== elementId)
+
+            return {
+                layers: state.layers.map(layer =>
+                    layer.id === layerId ? {
+                        ...layer,
+                        elements: layer.elements.filter(element => element.id !== elementId)
+                    } : layer
+                ),
+                selectedElementIds,
+                selectedElementId: selectedElementIds.length === 1 ? selectedElementIds[0] : null
+            }
+
+        }),
+
+    deleteSelectedElements: () => {
+        set(state => {
+            if (state.selectedElementIds.length === 0) return state
+
+            const selectedSet = new Set(state.selectedElementIds)
+
+            return {
+                layers: state.layers.map(layer => ({
+                    ...layer,
+                    elements: layer.elements.filter(element => !selectedSet.has(element.id))
+                })
+
+                ),
+
+                selectedElementIds: [],
+                selectedElementId: null
+            }
+        })
+    },
 
     // Track which element is selected on the canvas
-    setSelectedElement: (id) => set({ selectedElementId: id }),
+    setSelectedElement: id =>
+        set({
+            selectedElementId: id,
+            selectedElementIds: id ? [id] : []
+        }),
+
+    setSelectedElements: (ids) => set(
+        state => {
+            const selectedSet = new Set(ids)
+
+            const selectedElements = state.layers.flatMap(
+                layer => layer.elements.filter(element =>
+                    selectedSet.has(element.id)
+                )
+            )
+
+            console.log("selection: ", selectedElements)
+
+            return {
+                selectedElementIds: ids,
+                selectedElementId: ids.length === 1 ? ids[0] : null
+            }
+        }
+    ),
+
 }))
+
 
 // ----------------------------------------------------------------
 // Export the uid helper so other files can use it when creating elements

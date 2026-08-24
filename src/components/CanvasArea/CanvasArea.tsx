@@ -40,7 +40,9 @@ const CanvasArea = forwardRef<CanvasAreaHandler>((_, ref) => {
     const addElement = useEditorStore(state => state.addElement)
     const layers = useEditorStore(state => state.layers)
     const setSelectedElement = useEditorStore(state => state.setSelectedElement)
+    const setSelectedElements = useEditorStore(state => state.setSelectedElements)
     const selectedElementId = useEditorStore(state => state.selectedElementId)
+    const selectedElementIds = useEditorStore(state => state.selectedElementIds)
     const updateElement = useEditorStore(state => state.updateElement)
     const deleteElement = useEditorStore(state => state.deleteElement)
 
@@ -55,6 +57,7 @@ const CanvasArea = forwardRef<CanvasAreaHandler>((_, ref) => {
     const activeToolRef = useRef(activeTool)
     const activeLayerIdRef = useRef(activeLayerId)
     const selectedElementIdRef = useRef(selectedElementId)
+    const selectedElementIdsRef = useRef(selectedElementIds)
     const layersRef = useRef(layers)
 
     //persistent mutable variables that don't belong to React at all
@@ -75,6 +78,7 @@ const CanvasArea = forwardRef<CanvasAreaHandler>((_, ref) => {
         activeLayerIdRef.current = activeLayerId
         layersRef.current = layers
         selectedElementIdRef.current = selectedElementId
+        selectedElementIdsRef.current = selectedElementIds
         artboardSizeRef.current = artboardSize
     })
 
@@ -118,12 +122,14 @@ const CanvasArea = forwardRef<CanvasAreaHandler>((_, ref) => {
                 activeLayerIdRef,
                 layersRef,
                 selectedElementIdRef,
+                selectedElementIdsRef,
                 hoveredHandleRef,
                 rendererRef
             },
             {
                 updateElement,
                 setSelectedElement,
+                setSelectedElements
             },
         )
 
@@ -265,7 +271,7 @@ const CanvasArea = forwardRef<CanvasAreaHandler>((_, ref) => {
     // This means drag frames never trigger an unnecessary composite rebuild.
     useEffect(() => {
         rendererRef.current?.requestFrame()
-    }, [artboardSize, zoom, pan, layers, selectedElementId])
+    }, [artboardSize, zoom, pan, layers, selectedElementId, selectedElementIds])
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -305,11 +311,27 @@ const CanvasArea = forwardRef<CanvasAreaHandler>((_, ref) => {
 
     const handleBake = () => {
         if (!selectedElementId || !activeLayerId) return
-        const layer = layers.find(l => l.id === activeLayerId)
-        const element = layer?.elements.find(e => e.id === selectedElementId)
+
+        const layer = layers.find(
+            layer => layer.id === activeLayerId
+        )
+
+        const element = layer?.elements.find(
+            element => element.id === selectedElementId
+        )
+
         if (!element) return
-        rendererRef.current?.bakeElement(activeLayerId, element)
-        deleteElement(activeLayerId, selectedElementId)
+
+        rendererRef.current?.bakeElement(
+            activeLayerId,
+            element
+        )
+
+        deleteElement(
+            activeLayerId,
+            selectedElementId
+        )
+
         setSelectedElement(null)
     }
 
