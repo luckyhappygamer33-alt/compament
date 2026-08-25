@@ -1,34 +1,62 @@
 import './PropertiesPanel.css'
 import { useEditorStore } from '../../store/editorStore'
-import type { Color, Element } from '../../types/schema'
+import type { Element } from '../../types/schema'
 import { buildMasterPropertiesObject } from './MasterPropertiesObjectBuilder'
-import { resolvePropertyStates } from './PropertyStatesResolver'
+import { resolvePropertyStates, type PropertyState } from './PropertyStatesResolver'
 
-function colorToHex(color: Color): string {
-    const toHex = (value: number) =>
-        Math.max(0, Math.min(255, Math.round(value)))
-            .toString(16)
-            .padStart(2, '0')
+function addProperty(
+    property: string,
+    propertyState: PropertyState<unknown>
+) {
+    const value = propertyState.state === 'same' ? String(propertyState.value) : ''
 
-    return `#${toHex(color.r)}${toHex(color.g)}${toHex(color.b)}`
+    const placeholder = propertyState.state === 'mixed' ? '--' : undefined
+
+
+    const disabled = propertyState.state === 'not-common'
+
+    return (
+        <div
+            className='property-row property-row-single'
+            key={property}
+        >
+            <label>{property}</label>
+            <input
+                type="text"
+                value={value}
+                placeholder={placeholder}
+                disabled={disabled}
+                readOnly
+            />
+        </div>
+    )
 }
 
-function hexToColor(hex: string, alpha = 1): Color {
-    const value = hex.replace('#', '')
+function addPropertiesLevel(
+    propertiesLevel: Record<string, unknown>
+) {
+    return Object.entries(propertiesLevel).map(
+        ([property, value]) => {
+            if (typeof value !== 'object' || value == null) return null
+            if ('state' in value) {
+                return addProperty(property, value as PropertyState<unknown>)
+            }
 
-    return {
-        r: parseInt(value.slice(0, 2), 16),
-        g: parseInt(value.slice(2, 4), 16),
-        b: parseInt(value.slice(4, 6), 16),
-        a: alpha,
-    }
+            return (
+                <div key={property}>
+                    <div className='property-group-title'>{property}</div>
+                    {addPropertiesLevel(value as Record<string, unknown>)}
+
+                </div>
+            )
+
+        })
 }
 
 export default function PropertiesPanel({ onBake }: { onBake: () => void }) {
     const layers = useEditorStore(state => state.layers)
     const selectedElementId = useEditorStore(state => state.selectedElementId)
     const selectedElementIds = useEditorStore(state => state.selectedElementIds)
-    const updateElement = useEditorStore(state => state.updateElement)
     const deleteElement = useEditorStore(state => state.deleteElement)
     const setSelectedElement = useEditorStore(state => state.setSelectedElement)
 
@@ -63,262 +91,26 @@ export default function PropertiesPanel({ onBake }: { onBake: () => void }) {
         }
     }
 
-    const update = (changes: Partial<Element>) => {
-        if (!selectedElement || !selectedLayerId) return
-
-        updateElement(
-            selectedLayerId,
-            selectedElement.id,
-            changes
-        )
-    }
-
-    const updatePosition = (axis: 'x' | 'y', value: number) => {
-        if (!selectedElement) return
-
-        update({
-            position: {
-                ...selectedElement.position,
-                [axis]: value,
-            },
-        })
-    }
-
-    const updateSize = (
-        dimension: 'width' | 'height',
-        value: number
-    ) => {
-        if (!selectedElement) return
-
-        update({
-            size: {
-                ...selectedElement.size,
-                [dimension]: value,
-            },
-        })
-    }
-
-    const updateOpacity = (value: number) => {
-        if (!selectedElement) return
-
-        update({
-            style: {
-                ...selectedElement.style,
-                opacity: value,
-            },
-        })
-    }
-
-    const updateFillColor = (color: Color) => {
-        if (!selectedElement) return
-
-        update({
-            style: {
-                ...selectedElement.style,
-                fill: {
-                    type: 'solid',
-                    color,
-                },
-            },
-        })
-    }
-
     return (
-        <div className="properties-panel">
-            <div className="panel-header">Properties</div>
+        <div className='properties-panel'>
+            <div className='panel-header'>
+                Properties
+            </div>
 
-            <div className="panel-body">
-                {!selectedElement ? (
-                    <span className="panel-empty">
-                        No element selected
+            <div className='panel-body'>
+                {selectedElements.length === 0 ? (
+                    <span className='panel-empty'>
+                        No elements selected
                     </span>
                 ) : (
-                    <div className="property-groups">
+                    <div className='property-groups'>
+                        {addPropertiesLevel(propertyStates)}
 
-                        {/* Position */}
-                        <section className="property-group">
-                            <div className="property-group-title">
-                                Transform
-                            </div>
-
-                            <div className="property-row">
-                                <label>X</label>
-                                <input
-                                    type="number"
-                                    value={selectedElement.position.x}
-                                    onChange={event =>
-                                        updatePosition(
-                                            'x',
-                                            Number(event.target.value)
-                                        )
-                                    }
-                                />
-
-                                <label>Y</label>
-                                <input
-                                    type="number"
-                                    value={selectedElement.position.y}
-                                    onChange={event =>
-                                        updatePosition(
-                                            'y',
-                                            Number(event.target.value)
-                                        )
-                                    }
-                                />
-                            </div>
-
-                            <div className="property-row">
-                                <label>W</label>
-                                <input
-                                    type="number"
-                                    min="0"
-                                    value={selectedElement.size.width}
-                                    onChange={event =>
-                                        updateSize(
-                                            'width',
-                                            Number(event.target.value)
-                                        )
-                                    }
-                                />
-
-                                <label>H</label>
-                                <input
-                                    type="number"
-                                    min="0"
-                                    value={selectedElement.size.height}
-                                    onChange={event =>
-                                        updateSize(
-                                            'height',
-                                            Number(event.target.value)
-                                        )
-                                    }
-                                />
-                            </div>
-
-                            <div className="property-row property-row-single">
-                                <label>Rotation</label>
-                                <input
-                                    type="number"
-                                    value={selectedElement.rotation}
-                                    onChange={event =>
-                                        update({
-                                            rotation: Number(
-                                                event.target.value
-                                            ),
-                                        })
-                                    }
-                                />
-                                <span className="property-unit">°</span>
-                            </div>
-                        </section>
-
-                        {/* Appearance */}
-                        <section className="property-group">
-                            <div className="property-group-title">
-                                Appearance
-                            </div>
-
-                            <div className="property-row property-row-single">
-                                <label>Opacity</label>
-
-                                <input
-                                    type="number"
-                                    min="0"
-                                    max="1"
-                                    step="0.01"
-                                    value={selectedElement.style.opacity}
-                                    onChange={event =>
-                                        updateOpacity(
-                                            Math.max(
-                                                0,
-                                                Math.min(
-                                                    1,
-                                                    Number(
-                                                        event.target.value
-                                                    )
-                                                )
-                                            )
-                                        )
-                                    }
-                                />
-                            </div>
-
-                            <div className="property-row property-row-single">
-                                <label>Fill</label>
-
-                                {selectedElement.style.fill?.type ===
-                                    'solid' ? (
-                                    <div className="color-control">
-                                        <input
-                                            className="color-input"
-                                            type="color"
-                                            value={colorToHex(
-                                                selectedElement.style.fill.color
-                                            )}
-                                            onChange={event =>
-                                                updateFillColor(
-                                                    hexToColor(
-                                                        event.target.value,
-                                                        selectedElement.style
-                                                            .fill?.type ===
-                                                            'solid'
-                                                            ? selectedElement
-                                                                .style.fill
-                                                                .color.a
-                                                            : 1
-                                                    )
-                                                )
-                                            }
-                                        />
-
-                                        <span>
-                                            {colorToHex(
-                                                selectedElement.style.fill.color
-                                            )}
-                                        </span>
-                                    </div>
-                                ) : (
-                                    <span className="property-value">
-                                        {selectedElement.style.fill?.type ===
-                                            'gradient'
-                                            ? 'Gradient'
-                                            : 'None'}
-                                    </span>
-                                )}
-                            </div>
-                        </section>
-
-                        {/* Element-specific properties */}
-                        {selectedElement.type === 'rectangle' && (
-                            <section className="property-group">
-                                <div className="property-group-title">
-                                    Rectangle
-                                </div>
-
-                                <div className="property-row property-row-single">
-                                    <label>Radius</label>
-
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        value={selectedElement.cornerRadius}
-                                        onChange={event =>
-                                            update({
-                                                cornerRadius: Number(
-                                                    event.target.value
-                                                ),
-                                            })
-                                        }
-                                    />
-                                </div>
-                            </section>
-                        )}
-
-                        {/*Element Actions*/}
                         <section className='property-group'>
                             <div className='property-group-title'>
                                 Element Actions
                             </div>
+
                             <div className='element-actions'>
                                 <button
                                     type='button'
@@ -328,13 +120,11 @@ export default function PropertiesPanel({ onBake }: { onBake: () => void }) {
                                     Bake
                                 </button>
                                 <button
-                                    type="button"
+                                    type='button'
                                     className='element-action-button'
                                     onClick={() => {
                                         if (!selectedElement || !selectedLayerId) return
-
                                         deleteElement(selectedLayerId, selectedElement.id)
-
                                         setSelectedElement(null)
                                     }}
                                 >

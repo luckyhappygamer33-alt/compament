@@ -1,7 +1,7 @@
 import type { Element } from '../../types/schema'
 import { type PropertyBranch, type MasterPropertiesObject, isObject } from './MasterPropertiesObjectBuilder'
 
-type PropertyState<T> =
+export type PropertyState<T> =
     | {
         state: 'same'
         value: T
