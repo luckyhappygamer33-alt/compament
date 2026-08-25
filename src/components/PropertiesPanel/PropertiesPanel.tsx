@@ -57,11 +57,10 @@ export default function PropertiesPanel({ onBake }: { onBake: () => void }) {
     const selectedElementIds = useEditorStore(state => state.selectedElementIds)
     const deleteElement = useEditorStore(state => state.deleteElement)
     const setSelectedElements = useEditorStore(state => state.setSelectedElements)
-    const selectedElementIdsSet = new Set(selectedElementIds)
 
     const selectedElements = layers.flatMap(layer =>
         layer.elements.filter(element =>
-            selectedElementIdsSet.has(element.id)
+            selectedElementIds.includes(element.id)
         )
     )
 
@@ -102,7 +101,7 @@ export default function PropertiesPanel({ onBake }: { onBake: () => void }) {
                                     onClick={() => {
                                         for (const layer of layers) {
                                             for (const element of layer.elements) {
-                                                if (selectedElementIdsSet.has(element.id)) {
+                                                if (selectedElementIds.includes(element.id)) {
                                                     deleteElement(layer.id, element.id)
                                                 }
                                             }

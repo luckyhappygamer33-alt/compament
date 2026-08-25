@@ -318,10 +318,8 @@ const CanvasArea = forwardRef<CanvasAreaHandler>((_, ref) => {
 
         if (!layer) return
 
-        const selectedIdSet = new Set(selectedElementIds)
-
         const elementsToBake = layer.elements.filter(element =>
-            selectedIdSet.has(element.id)
+            selectedElementIds.includes(element.id)
         )
 
         for (const element of elementsToBake) {
