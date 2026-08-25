@@ -310,29 +310,27 @@ const CanvasArea = forwardRef<CanvasAreaHandler>((_, ref) => {
     }
 
     const handleBake = () => {
-        if (!selectedElementId || !activeLayerId) return
+        if (selectedElementIds.length === 0 || !activeLayerId) return
 
         const layer = layers.find(
             layer => layer.id === activeLayerId
         )
 
-        const element = layer?.elements.find(
-            element => element.id === selectedElementId
+        if (!layer) return
+
+        const selectedIdSet = new Set(selectedElementIds)
+
+        const elementsToBake = layer.elements.filter(element =>
+            selectedIdSet.has(element.id)
         )
 
-        if (!element) return
+        for (const element of elementsToBake) {
+            rendererRef.current?.bakeElement(activeLayerId, element)
+            deleteElement(activeLayerId, element.id)
+        }
 
-        rendererRef.current?.bakeElement(
-            activeLayerId,
-            element
-        )
+        setSelectedElements([])
 
-        deleteElement(
-            activeLayerId,
-            selectedElementId
-        )
-
-        setSelectedElement(null)
     }
 
     useImperativeHandle(ref, () => ({ handleBake: handleBake }))
