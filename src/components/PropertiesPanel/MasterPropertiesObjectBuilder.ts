@@ -1,6 +1,10 @@
 import type { Element } from '../../types/schema'
 
-type PropertyNode = PropertyBranch | null
+export type PropertyLeaf = string
+
+type PropertyNode =
+    | PropertyLeaf
+    | PropertyBranch
 
 export type PropertyBranch = { [property: string]: PropertyNode }
 
@@ -48,7 +52,7 @@ function buildPropertiesLevel(
         if (allValuesAreObjects) {
             level[property] = buildPropertiesLevel(objectValues)
         } else {
-            level[property] = null
+            level[property] = typeof nonNullableValues[0]
         }
     }
 

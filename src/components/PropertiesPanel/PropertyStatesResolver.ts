@@ -66,7 +66,7 @@ function resolvePropertiesLevel(
             }
         }
 
-        if (node === null) {
+        if (typeof node === 'string') {
             resolvedLevel[property] = resolvePropertyState(values, objects.length)
             continue
         }
