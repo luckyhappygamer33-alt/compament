@@ -3,60 +3,57 @@ import { useEditorStore } from '../../store/editorStore'
 import { buildMasterPropertiesObject } from './MasterPropertiesObjectBuilder'
 import { resolvePropertyStates, type PropertyState } from './PropertyStatesResolver'
 
-function addProperty(
-    property: string,
-    propertyState: PropertyState<unknown>
-) {
-    const value = propertyState.state === 'same' ? String(propertyState.value) : ''
+function parseInputValue(
+    value: string
+): string | number {
+    if (value.trim() === '') return value
 
-    const placeholder = propertyState.state === 'mixed' ? '--' : undefined
-
-
-    const disabled = propertyState.state === 'not-common'
-
-    return (
-        <div
-            className='property-row property-row-single'
-            key={property}
-        >
-            <label>{property}</label>
-            <input
-                type="text"
-                value={value}
-                placeholder={placeholder}
-                disabled={disabled}
-                readOnly
-            />
-        </div>
-    )
+    const numberValue = Number(value)
+    return Number.isNaN(numberValue) ? value : numberValue
 }
 
-function addPropertiesLevel(
-    propertiesLevel: Record<string, unknown>
-) {
-    return Object.entries(propertiesLevel).map(
-        ([property, value]) => {
-            if (typeof value !== 'object' || value == null) return null
-            if ('state' in value) {
-                return addProperty(property, value as PropertyState<unknown>)
-            }
+function updatePropertyAtPath<T extends object>(
+    object: T,
+    path: string[],
+    newValue: unknown
+): T {
+    const [property, ...remainingPath] = path
+    if (!property) return object
 
-            return (
-                <div key={property}>
-                    <div className='property-group-title'>{property}</div>
-                    {addPropertiesLevel(value as Record<string, unknown>)}
+    if (remainingPath.length === 0) {
+        return {
+            ...object,
+            [property]: newValue
+        }
+    }
 
-                </div>
-            )
+    const currentValue = (object as Record<string, unknown>)[property]
 
-        })
+    if (
+        typeof currentValue !== 'object' ||
+        currentValue === null ||
+        Array.isArray(currentValue)
+    ) {
+        return object
+    }
+
+    return {
+        ...object,
+        [property]: updatePropertyAtPath(
+            currentValue,
+            remainingPath,
+            newValue
+        )
+    }
 }
+
 
 export default function PropertiesPanel({ onBake }: { onBake: () => void }) {
     const layers = useEditorStore(state => state.layers)
     const selectedElementIds = useEditorStore(state => state.selectedElementIds)
     const deleteElement = useEditorStore(state => state.deleteElement)
     const setSelectedElements = useEditorStore(state => state.setSelectedElements)
+    const updateElement = useEditorStore(state => state.updateElement)
 
     const selectedElements = layers.flatMap(layer =>
         layer.elements.filter(element =>
@@ -66,6 +63,78 @@ export default function PropertiesPanel({ onBake }: { onBake: () => void }) {
 
     const masterPropertiesObject = buildMasterPropertiesObject(selectedElements)
     const propertyStates = resolvePropertyStates(selectedElements, masterPropertiesObject)
+
+    function addProperty(
+        property: string,
+        propertyState: PropertyState<unknown>,
+        propertyPath: string[]
+    ) {
+        const value = propertyState.state === 'same' ? String(propertyState.value) : ''
+        const placeholder = propertyState.state === 'mixed' ? '--' : undefined
+        const disabled = propertyState.state === 'not-common'
+        const isReadOnly = property === 'id' || property === 'type'
+
+        console.log('property:', property, 'path:', propertyPath)
+
+        return (
+            <div
+                className='property-row property-row-single'
+                key={property}
+            >
+                <label>{property}</label>
+                <input
+                    type="text"
+                    value={value}
+                    placeholder={placeholder}
+                    disabled={disabled}
+                    readOnly={isReadOnly}
+                    onChange={event => {
+                        updateProperty(propertyPath, parseInputValue(event.target.value))
+                    }}
+                />
+            </div>
+        )
+    }
+
+    function addPropertiesLevel(
+        propertiesLevel: Record<string, unknown>,
+        currentPath: string[]
+    ) {
+        return Object.entries(propertiesLevel).map(
+            ([property, value]) => {
+                if (typeof value !== 'object' || value == null) return null
+
+                const propertyPath = [...currentPath, property]
+
+                if ('state' in value) {
+                    return addProperty(property, value as PropertyState<unknown>, propertyPath)
+                }
+
+                return (
+                    <div key={property}>
+                        <div className='property-group-title'>{property}</div>
+                        {addPropertiesLevel(value as Record<string, unknown>, propertyPath)}
+
+                    </div>
+                )
+
+            })
+    }
+
+    function updateProperty(
+        propertyPath: string[],
+        newValue: unknown
+    ) {
+        for (const layer of layers) {
+            for (const element of layer.elements) {
+                if (!selectedElementIds.includes(element.id)) continue
+
+                const updatedElement = updatePropertyAtPath(element, propertyPath, newValue)
+
+                updateElement(layer.id, element.id, updatedElement)
+            }
+        }
+    }
 
     return (
         <div className='properties-panel'>
@@ -80,7 +149,7 @@ export default function PropertiesPanel({ onBake }: { onBake: () => void }) {
                     </span>
                 ) : (
                     <div className='property-groups'>
-                        {addPropertiesLevel(propertyStates)}
+                        {addPropertiesLevel(propertyStates, [])}
 
                         <section className='property-group'>
                             <div className='property-group-title'>
