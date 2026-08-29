@@ -1,4 +1,5 @@
 import './PropertiesPanel.css'
+import { usePropertyInputDraftChanges } from './usePropertyInputDraftChanges'
 import { useEditorStore } from '../../store/editorStore'
 import { buildMasterPropertiesObject, type PropertyBranch } from './MasterPropertiesObjectBuilder'
 import { resolvePropertyStates, type PropertyState } from './PropertyStatesResolver'
@@ -41,6 +42,7 @@ function updatePropertyAtPath<T extends object>(
 
 
 export default function PropertiesPanel({ onBake }: { onBake: () => void }) {
+
     const layers = useEditorStore(state => state.layers)
     const selectedElementIds = useEditorStore(state => state.selectedElementIds)
     const deleteElement = useEditorStore(state => state.deleteElement)
@@ -55,6 +57,8 @@ export default function PropertiesPanel({ onBake }: { onBake: () => void }) {
 
     const masterPropertiesObject = buildMasterPropertiesObject(selectedElements)
     const propertyStates = resolvePropertyStates(selectedElements, masterPropertiesObject)
+
+    usePropertyInputDraftChanges(selectedElementIds, propertyStates)
 
     function addProperty(
         property: string,
@@ -74,6 +78,7 @@ export default function PropertiesPanel({ onBake }: { onBake: () => void }) {
                         propertyPath,
                         propertyState,
                         inputValueType,
+                        selectedElementIds,
                         newValue => {
                             updateProperty(propertyPath, newValue)
                         }

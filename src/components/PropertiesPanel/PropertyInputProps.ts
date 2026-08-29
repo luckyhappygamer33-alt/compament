@@ -1,5 +1,6 @@
 import type { InputHTMLAttributes } from 'react'
 import type { PropertyState } from './PropertyStatesResolver'
+import { notifyDraftChange } from './PropertyInputDraftStore'
 
 type ParsedInput =
     | {
@@ -54,16 +55,32 @@ function parseInputValue(
     }
 }
 
+export function clearPropertyInputDrafts() {
+    if (inputDrafts.size === 0) return
+
+    inputDrafts.clear()
+    notifyDraftChange()
+
+}
+
 export function getPropertyInputProps(
     property: string,
     propertyPath: string[],
     propertyState: PropertyState<unknown>,
     inputValueType: string,
+    selectedElementIds: string[],
     updateValue: (newValue: unknown) => void
 ): InputHTMLAttributes<HTMLInputElement> {
-    const inputKey = propertyPath.join('.')
+    const propertyKey = propertyPath.join('.')
+    const inputKeys = selectedElementIds.map(elementId => `${elementId}:${propertyKey}`)
     const commitedValue = propertyState.state === 'same' ? String(propertyState.value) : ''
-    const value = inputDrafts.get(inputKey) ?? commitedValue
+
+    const draftValues = inputKeys.map(inputKey => inputDrafts.get(inputKey))
+    const firstDraftValue = draftValues[0]
+    const allElementsHaveSameDraft = firstDraftValue !== undefined &&
+        draftValues.every(draftValue => draftValue === firstDraftValue)
+
+    const value = allElementsHaveSameDraft ? firstDraftValue : commitedValue
 
     return {
         type: 'text',
@@ -73,12 +90,25 @@ export function getPropertyInputProps(
         readOnly: property === 'id' || property === 'type',
         onChange: event => {
             const inputValue = event.target.value
-            inputDrafts.set(inputKey, inputValue)
 
             const parsedInput = parseInputValue(inputValue, inputValueType)
-            if (!parsedInput.valid) return
 
-            updateValue(parsedInput.value)
+            if (parsedInput.valid) {
+                for (const inputKey of inputKeys) {
+                    inputDrafts.delete(inputKey)
+                }
+
+                updateValue(parsedInput.value)
+                notifyDraftChange()
+
+                return
+            }
+
+            for (const inputKey of inputKeys) {
+                inputDrafts.set(inputKey, inputValue)
+            }
+
+            notifyDraftChange()
         }
     }
 }
