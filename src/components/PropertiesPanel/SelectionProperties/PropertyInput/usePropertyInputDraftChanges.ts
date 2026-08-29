@@ -1,5 +1,5 @@
 import { useEffect, useSyncExternalStore } from 'react'
-import { type PropertiesState } from './SelectionProperties/SelectionPropertyStatesResolver'
+import { type PropertiesState } from '../SelectionPropertyStatesResolver'
 import { subscribe, getSnapshot } from './PropertyInputDraftStore'
 import { clearPropertyInputDrafts } from './PropertyInputProps'
 

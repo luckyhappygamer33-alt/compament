@@ -1,6 +1,6 @@
 import type { InputHTMLAttributes } from 'react'
 import type { PropertyState } from './SelectionProperties/SelectionPropertyStatesResolver'
-import { notifyDraftChange } from './PropertyInputDraftStore'
+import { notifyDraftChange } from './SelectionProperties/PropertyInput/PropertyInputDraftStore'
 
 type ParsedInput =
     | {

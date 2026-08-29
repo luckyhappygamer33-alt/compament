@@ -1,9 +1,9 @@
 import './PropertiesPanel.css'
-import { usePropertyInputDraftChanges } from './usePropertyInputDraftChanges'
+import { usePropertyInputDraftChanges } from './SelectionProperties/PropertyInput/usePropertyInputDraftChanges'
 import { useEditorStore } from '../../store/editorStore'
 import { buildMasterPropertiesObject, type PropertyBranch } from './SelectionProperties/MasterPropertiesObjectBuilder'
 import { resolveSelectionPropertyStates, type PropertyState } from './SelectionProperties/SelectionPropertyStatesResolver'
-import { getPropertyInputProps } from './PropertyInputProps'
+import { getPropertyInputProps } from './SelectionProperties/PropertyInput/PropertyInputProps'
 
 function updatePropertyAtPath<T extends object>(
     object: T,
