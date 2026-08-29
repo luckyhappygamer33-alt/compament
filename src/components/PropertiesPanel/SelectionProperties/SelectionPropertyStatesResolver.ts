@@ -1,4 +1,4 @@
-import type { Element } from '../../types/schema'
+import type { Element } from '../../../types/schema'
 import { type PropertyBranch, type MasterPropertiesObject, isObject } from './MasterPropertiesObjectBuilder'
 
 export type PropertyState<T> =
@@ -9,20 +9,20 @@ export type PropertyState<T> =
     | { state: 'mixed' }
     | { state: 'not-common' }
 
-type PropertiesOfElementsUnion<T> = T extends unknown ? keyof T : never
+type ElementsUnionProperties<T> = T extends unknown ? keyof T : never
 
-type PropertyValueType<T, K extends PropertyKey> =
+type ObjectPropertyType<T, K extends PropertyKey> =
     T extends unknown ? K extends keyof T ? T[K] : never : never
 
-type DerivePropertiesState<T> =
+type ResolvedPropertyStatesShape<T> =
     [NonNullable<T>] extends [object]
     ? {
-        [K in PropertiesOfElementsUnion<NonNullable<T>>]:
-        DerivePropertiesState<PropertyValueType<NonNullable<T>, K>>
+        [K in ElementsUnionProperties<NonNullable<T>>]:
+        ResolvedPropertyStatesShape<ObjectPropertyType<NonNullable<T>, K>>
     }
     : PropertyState<T>
 
-export type PropertiesState = DerivePropertiesState<Element>
+export type ResolvedPropertyStates = ResolvedPropertyStatesShape<Element>
 
 function resolvePropertyState<T>(
     values: T[],
@@ -50,7 +50,7 @@ function resolvePropertyState<T>(
 
 }
 
-function resolvePropertiesLevel(
+function resolvePropertyStatesLevel(
     values: unknown[],
     masterLevel: PropertyBranch
 ): Record<string, unknown> {
@@ -73,15 +73,15 @@ function resolvePropertiesLevel(
 
         const childObjects = values.filter(isObject)
 
-        resolvedLevel[property] = resolvePropertiesLevel(childObjects, node)
+        resolvedLevel[property] = resolvePropertyStatesLevel(childObjects, node)
     }
 
     return resolvedLevel
 }
 
-export function resolvePropertyStates(
+export function resolveSelectionPropertyStates(
     elements: Element[],
     masterProperties: MasterPropertiesObject
-): PropertiesState {
-    return resolvePropertiesLevel(elements, masterProperties) as PropertiesState
+): ResolvedPropertyStates {
+    return resolvePropertyStatesLevel(elements, masterProperties) as ResolvedPropertyStates
 }

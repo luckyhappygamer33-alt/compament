@@ -1,4 +1,4 @@
-import type { Element } from '../../types/schema'
+import type { Element } from '../../../types/schema'
 
 export type PropertyLeaf = string
 

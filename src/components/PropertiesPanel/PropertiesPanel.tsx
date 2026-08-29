@@ -1,8 +1,8 @@
 import './PropertiesPanel.css'
 import { usePropertyInputDraftChanges } from './usePropertyInputDraftChanges'
 import { useEditorStore } from '../../store/editorStore'
-import { buildMasterPropertiesObject, type PropertyBranch } from './MasterPropertiesObjectBuilder'
-import { resolvePropertyStates, type PropertyState } from './PropertyStatesResolver'
+import { buildMasterPropertiesObject, type PropertyBranch } from './SelectionProperties/MasterPropertiesObjectBuilder'
+import { resolveSelectionPropertyStates, type PropertyState } from './SelectionProperties/SelectionPropertyStatesResolver'
 import { getPropertyInputProps } from './PropertyInputProps'
 
 function updatePropertyAtPath<T extends object>(
@@ -40,7 +40,6 @@ function updatePropertyAtPath<T extends object>(
     }
 }
 
-
 export default function PropertiesPanel({ onBake }: { onBake: () => void }) {
 
     const layers = useEditorStore(state => state.layers)
@@ -56,9 +55,9 @@ export default function PropertiesPanel({ onBake }: { onBake: () => void }) {
     )
 
     const masterPropertiesObject = buildMasterPropertiesObject(selectedElements)
-    const propertyStates = resolvePropertyStates(selectedElements, masterPropertiesObject)
+    const resolvedPropertyStates = resolveSelectionPropertyStates(selectedElements, masterPropertiesObject)
 
-    usePropertyInputDraftChanges(selectedElementIds, propertyStates)
+    usePropertyInputDraftChanges(selectedElementIds, resolvedPropertyStates)
 
     function addProperty(
         property: string,
@@ -89,11 +88,11 @@ export default function PropertiesPanel({ onBake }: { onBake: () => void }) {
     }
 
     function addPropertiesLevel(
-        propertiesLevel: Record<string, unknown>,
+        propertiesStatesLevel: Record<string, unknown>,
         currentPath: string[],
         masterLevel: PropertyBranch,
     ) {
-        return Object.entries(propertiesLevel).map(
+        return Object.entries(propertiesStatesLevel).map(
             ([property, value]) => {
                 if (typeof value !== 'object' || value == null) return null
 
@@ -108,15 +107,21 @@ export default function PropertiesPanel({ onBake }: { onBake: () => void }) {
                     return addProperty(property, value as PropertyState<unknown>, propertyPath, node)
                 }
 
+                const propertyStatesLevel = value as Record<string, unknown>
                 return (
                     <div key={property}>
                         <div className='property-group-title'>{property}</div>
-                        {addPropertiesLevel(value as Record<string, unknown>, propertyPath, node)}
+                        {addPropertiesLevel(propertyStatesLevel, propertyPath, node)}
 
                     </div>
                 )
 
             })
+    }
+
+    function addProperties() {
+        const propertyStatesTopLevel = resolvedPropertyStates
+        return addPropertiesLevel(propertyStatesTopLevel, [], masterPropertiesObject)
     }
 
     function updateProperty(
@@ -147,7 +152,7 @@ export default function PropertiesPanel({ onBake }: { onBake: () => void }) {
                     </span>
                 ) : (
                     <div className='property-groups'>
-                        {addPropertiesLevel(propertyStates, [], masterPropertiesObject)}
+                        {addProperties()}
 
                         <section className='property-group'>
                             <div className='property-group-title'>
