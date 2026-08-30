@@ -1,5 +1,5 @@
 import type { InputHTMLAttributes } from 'react'
-import type { PropertyState } from '../SelectionPropertyStatesResolver'
+import type { PropertyState } from '../SelectionProperties/SelectionPropertyStatesResolver'
 import {
     getDraft,
     setDraft,

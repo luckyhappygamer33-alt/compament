@@ -1,5 +1,5 @@
 import { useEffect, useSyncExternalStore } from 'react'
-import { type ResolvedPropertyStates } from '../SelectionPropertyStatesResolver'
+import { type ResolvedPropertyStates } from '../SelectionProperties/SelectionPropertyStatesResolver'
 import {
     subscribe,
     getSnapshot,

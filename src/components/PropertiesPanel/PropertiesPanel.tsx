@@ -1,9 +1,7 @@
 import './PropertiesPanel.css'
-import { useSelectionDraftSync } from './SelectionProperties/PropertyInput/useSelectionDraftSync'
 import { useEditorStore } from '../../store/editorStore'
-import { buildMasterPropertiesObject, type PropertyBranch } from './SelectionProperties/MasterPropertiesObjectBuilder'
-import { resolveSelectionPropertyStates, type PropertyState } from './SelectionProperties/SelectionPropertyStatesResolver'
-import { getPropertyInput } from './SelectionProperties/PropertyInput/PropertyInput'
+import * as SelectionProperties from './SelectionProperties'
+import * as PropertyInput from './PropertyInput'
 
 function updatePropertyAtPath<T extends object>(
     object: T,
@@ -54,14 +52,14 @@ export default function PropertiesPanel({ onBake }: { onBake: () => void }) {
         )
     )
 
-    const masterPropertiesObject = buildMasterPropertiesObject(selectedElements)
-    const resolvedPropertyStates = resolveSelectionPropertyStates(selectedElements, masterPropertiesObject)
+    const masterPropertiesObject = SelectionProperties.buildMasterPropertiesObject(selectedElements)
+    const resolvedPropertyStates = SelectionProperties.resolveSelectionPropertyStates(selectedElements, masterPropertiesObject)
 
-    useSelectionDraftSync(selectedElementIds, resolvedPropertyStates)
+    PropertyInput.useSelectionDraftSync(selectedElementIds, resolvedPropertyStates)
 
     function addProperty(
         property: string,
-        propertyState: PropertyState<unknown>,
+        propertyState: SelectionProperties.PropertyState<unknown>,
         propertyPath: string[],
         inputValueType: string
     ) {
@@ -72,7 +70,7 @@ export default function PropertiesPanel({ onBake }: { onBake: () => void }) {
             >
                 <label>{property}</label>
                 <input
-                    {...getPropertyInput(
+                    {...PropertyInput.getPropertyInput(
                         property,
                         propertyPath,
                         propertyState,
@@ -90,7 +88,7 @@ export default function PropertiesPanel({ onBake }: { onBake: () => void }) {
     function addPropertiesLevel(
         propertiesStatesLevel: Record<string, unknown>,
         currentPath: string[],
-        masterLevel: PropertyBranch,
+        masterLevel: SelectionProperties.PropertyBranch,
     ) {
         return Object.entries(propertiesStatesLevel).map(
             ([property, value]) => {
@@ -104,7 +102,7 @@ export default function PropertiesPanel({ onBake }: { onBake: () => void }) {
                 if (propertyPath.join('.') === 'style.fill.color.a') return null //hide alpha from color)
 
                 if (typeof node === 'string') {
-                    return addProperty(property, value as PropertyState<unknown>, propertyPath, node)
+                    return addProperty(property, value as SelectionProperties.PropertyState<unknown>, propertyPath, node)
                 }
 
                 const propertyStatesLevel = value as Record<string, unknown>
