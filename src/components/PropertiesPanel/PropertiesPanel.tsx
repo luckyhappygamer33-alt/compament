@@ -1,9 +1,9 @@
 import './PropertiesPanel.css'
-import { usePropertyInputDraftChanges } from './SelectionProperties/PropertyInput/usePropertyInputDraftChanges'
+import { useSelectionDraftSync } from './SelectionProperties/PropertyInput/useSelectionDraftSync'
 import { useEditorStore } from '../../store/editorStore'
 import { buildMasterPropertiesObject, type PropertyBranch } from './SelectionProperties/MasterPropertiesObjectBuilder'
 import { resolveSelectionPropertyStates, type PropertyState } from './SelectionProperties/SelectionPropertyStatesResolver'
-import { getPropertyInputProps } from './SelectionProperties/PropertyInput/PropertyInputProps'
+import { getPropertyInput } from './SelectionProperties/PropertyInput/PropertyInput'
 
 function updatePropertyAtPath<T extends object>(
     object: T,
@@ -57,7 +57,7 @@ export default function PropertiesPanel({ onBake }: { onBake: () => void }) {
     const masterPropertiesObject = buildMasterPropertiesObject(selectedElements)
     const resolvedPropertyStates = resolveSelectionPropertyStates(selectedElements, masterPropertiesObject)
 
-    usePropertyInputDraftChanges(selectedElementIds, resolvedPropertyStates)
+    useSelectionDraftSync(selectedElementIds, resolvedPropertyStates)
 
     function addProperty(
         property: string,
@@ -72,7 +72,7 @@ export default function PropertiesPanel({ onBake }: { onBake: () => void }) {
             >
                 <label>{property}</label>
                 <input
-                    {...getPropertyInputProps(
+                    {...getPropertyInput(
                         property,
                         propertyPath,
                         propertyState,

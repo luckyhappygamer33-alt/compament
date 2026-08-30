@@ -1,11 +1,14 @@
 import { useEffect, useSyncExternalStore } from 'react'
-import { type PropertiesState } from '../SelectionPropertyStatesResolver'
-import { subscribe, getSnapshot } from './PropertyInputDraftStore'
-import { clearPropertyInputDrafts } from './PropertyInputProps'
+import { type ResolvedPropertyStates } from '../SelectionPropertyStatesResolver'
+import {
+    subscribe,
+    getSnapshot,
+    clearDrafts
+} from './SelectionDraftStore'
 
-export function usePropertyInputDraftChanges(
+export function useSelectionDraftSync(
     selectedElementIds: string[],
-    propertyStates: PropertiesState
+    propertyStates: ResolvedPropertyStates
 ) {
     useSyncExternalStore(subscribe, getSnapshot)
 
@@ -13,6 +16,6 @@ export function usePropertyInputDraftChanges(
     const propertyStatesKey = JSON.stringify(propertyStates)
 
     useEffect(() => {
-        clearPropertyInputDrafts()
+        clearDrafts()
     }, [selectionKey, propertyStatesKey])
 }

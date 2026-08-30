@@ -1,6 +1,12 @@
 import type { InputHTMLAttributes } from 'react'
-import type { PropertyState } from './SelectionProperties/SelectionPropertyStatesResolver'
-import { notifyDraftChange } from './SelectionProperties/PropertyInput/PropertyInputDraftStore'
+import type { PropertyState } from '../SelectionPropertyStatesResolver'
+import {
+    getDraft,
+    setDraft,
+    deleteDraft,
+    notifyDraftChange
+
+} from './SelectionDraftStore'
 
 type ParsedInput =
     | {
@@ -10,8 +16,6 @@ type ParsedInput =
     | {
         valid: false
     }
-
-const inputDrafts = new Map<string, string>()
 
 function parseInputValue(
     value: string,
@@ -55,15 +59,31 @@ function parseInputValue(
     }
 }
 
-export function clearPropertyInputDrafts() {
-    if (inputDrafts.size === 0) return
+function commitInputValue(
+    value: unknown,
+    inputKeys: string[],
+    updateValue: (newValue: unknown) => void
+) {
+    for (const inputKey of inputKeys) {
+        deleteDraft(inputKey)
+    }
 
-    inputDrafts.clear()
+    updateValue(value)
     notifyDraftChange()
-
 }
 
-export function getPropertyInputProps(
+function storeSelectionDraft(
+    value: string,
+    inputKeys: string[]
+) {
+    for (const inputKey of inputKeys) {
+        setDraft(inputKey, value)
+    }
+
+    notifyDraftChange()
+}
+
+export function getPropertyInput(
     property: string,
     propertyPath: string[],
     propertyState: PropertyState<unknown>,
@@ -73,42 +93,44 @@ export function getPropertyInputProps(
 ): InputHTMLAttributes<HTMLInputElement> {
     const propertyKey = propertyPath.join('.')
     const inputKeys = selectedElementIds.map(elementId => `${elementId}:${propertyKey}`)
+
     const commitedValue = propertyState.state === 'same' ? String(propertyState.value) : ''
+    let value = commitedValue
 
-    const draftValues = inputKeys.map(inputKey => inputDrafts.get(inputKey))
-    const firstDraftValue = draftValues[0]
-    const allElementsHaveSameDraft = firstDraftValue !== undefined &&
-        draftValues.every(draftValue => draftValue === firstDraftValue)
+    const selectionDraftKey = inputKeys[0]!
+    const selectionDraft = getDraft(selectionDraftKey)
+    const selectionDraftExists = selectionDraft !== undefined
 
-    const value = allElementsHaveSameDraft ? firstDraftValue : commitedValue
+    if (selectionDraftExists) {
+        value = selectionDraft
+    }
+
+    let placeholder: string | undefined
+
+    if (propertyState.state === 'mixed') {
+        placeholder = '--'
+    }
+
+    const disabled = propertyState.state === 'not-common'
+
+    const readOnly = property === 'id' || property === 'type'
 
     return {
         type: 'text',
         value,
-        placeholder: propertyState.state === 'mixed' ? '--' : undefined,
-        disabled: propertyState.state === 'not-common',
-        readOnly: property === 'id' || property === 'type',
+        placeholder: placeholder,
+        disabled: disabled,
+        readOnly: readOnly,
         onChange: event => {
             const inputValue = event.target.value
-
             const parsedInput = parseInputValue(inputValue, inputValueType)
 
             if (parsedInput.valid) {
-                for (const inputKey of inputKeys) {
-                    inputDrafts.delete(inputKey)
-                }
-
-                updateValue(parsedInput.value)
-                notifyDraftChange()
-
+                commitInputValue(parsedInput.value, inputKeys, updateValue)
                 return
             }
 
-            for (const inputKey of inputKeys) {
-                inputDrafts.set(inputKey, inputValue)
-            }
-
-            notifyDraftChange()
+            storeSelectionDraft(inputValue, inputKeys)
         }
     }
 }
