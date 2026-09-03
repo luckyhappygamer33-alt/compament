@@ -1,0 +1,19 @@
+.color-input-wrapper {
+    display: inline-flex;
+    position: relative;
+}
+
+.color-input-mixed-overlay {
+    position: absolute;
+    inset: 0;
+
+    border-radius: 4px;
+
+    background:
+        linear-gradient(to bottom right,
+            white 47%,
+            red 48%,
+            red 52%,
+            white 53%);
+    pointer-events: none;
+}

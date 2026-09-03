@@ -1,0 +1,1 @@
+export { getPropertyWidget } from './PropertyWidget'

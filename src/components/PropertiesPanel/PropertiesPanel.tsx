@@ -2,6 +2,7 @@ import './PropertiesPanel.css'
 import { useEditorStore } from '../../store/editorStore'
 import * as SelectionProperties from './SelectionProperties'
 import * as PropertyInput from './PropertyInput'
+import * as PropertyWidget from './PropertyWidget'
 
 function updatePropertyAtPath<T extends object>(
     object: T,
@@ -99,7 +100,17 @@ export default function PropertiesPanel({ onBake }: { onBake: () => void }) {
 
                 const propertyPath = [...currentPath, property]
 
-                if (propertyPath.join('.') === 'style.fill.color.a') return null //hide alpha from color)
+                const propertyWidget = PropertyWidget.getPropertyWidget(propertyPath, value, updateProperty)
+
+                if (propertyWidget) {
+                    return (
+                        <div key={property}>
+                            {propertyWidget}
+                        </div>
+                    )
+                }
+
+                if (propertyPath.join('.') === 'style.opacity') return null //hide alpha from color)
 
                 if (typeof node === 'string') {
                     return addProperty(property, value as SelectionProperties.PropertyState<unknown>, propertyPath, node)
