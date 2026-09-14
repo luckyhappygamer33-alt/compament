@@ -89,94 +89,269 @@ export class SelectTool implements InteractionTool {
     }
 
     onMouseDown(e: MouseEvent): void {
-        this.didDrag = false
+        this.beginPointerInteraction(e)
+    }
 
-        const worldX = (e.offsetX - this.refs.panRef.current.x) / this.refs.zoomRef.current
-        const worldY = (e.offsetY - this.refs.panRef.current.y) / this.refs.zoomRef.current
+    onMouseMove(e: MouseEvent) {
+        this.updatePointerInteraction(e)
+    }
 
-        const layers = this.refs.layersRef.current
+    onMouseUp(_e: MouseEvent) {
+        this.endPointerInteraction()
+    }
 
-        const selectedIds = this.refs.selectedElementIdsRef.current
-
-        //multi-select
-        if (selectedIds?.length === 0) return
-        if (selectedIds.length > 1) {
-            if (this.pointHitsSelectedElements(worldX, worldY, selectedIds)) {
-                this.startDrag(worldX, worldY, selectedIds)
-            }
+    onClick(e: MouseEvent) {
+        if (this.didDrag) {
+            this.didDrag = false
             return
         }
 
-        //single-select
-        const selectedId = selectedIds[0]
+        this.handleSelectClick(e)
+    }
 
-        const hitSize = HANDLE_SIZE / this.refs.zoomRef.current
+    draw(
+        ctx: CanvasRenderingContext2D,
+        layers: Layer[],
+        zoom: number,
+        selectionRenderer: SelectionRenderer
+    ) {
+        const selectedIds = this.refs.selectedElementIdsRef.current
+        if (selectedIds.length === 0) return
+
+        const selectedSet = new Set(selectedIds)
+        const isSingle = selectedIds.length === 1
+        const hoveredHandle = this.refs.hoveredHandleRef.current
+
 
         for (const layer of layers) {
-            if (layer.locked) continue
+            for (const element of layer.elements) {
+                if (!selectedSet.has(element.id)) continue
 
-            const element = layer.elements.find(el => el.id === selectedId)
-
-            if (!element) continue
-
-            const local = toLocalSpace(worldX, worldY, element)
-
-            //rotate handle
-            const rotateHandle = getRotateHandlePosition(element, SELECTION_PADDING, this.refs.zoomRef.current)
-
-            const rotateHandleHitSize = HANDLE_SIZE / this.refs.zoomRef.current
-            if (
-                local.x >= rotateHandle.x - rotateHandleHitSize / 2 &&
-                local.x <= rotateHandle.x + rotateHandleHitSize / 2 &&
-                local.y >= rotateHandle.y - rotateHandleHitSize / 2 &&
-                local.y <= rotateHandle.y + rotateHandleHitSize / 2
-            ) {
-                this.isRotating = true
-                const centerX = element.position.x + element.size.width / 2
-                const centerY = element.position.y + element.size.height / 2
-
-                this.rotateStartAngle = Math.atan2(worldY - centerY, worldX - centerX) * 180 / Math.PI
-                this.rotateStartElementAngle = element.rotation
-
-                return
-            }
-
-            //transform handles
-            for (
-                const handle of getHandlePositions(element, SELECTION_PADDING)
-            ) {
-                if (
-                    local.x >= handle.x - hitSize / 2 &&
-                    local.x <= handle.x + hitSize / 2 &&
-                    local.y >= handle.y - hitSize / 2 &&
-                    local.y <= handle.y + hitSize / 2
-                ) {
-                    this.isResizing = true
-                    this.activeHandle = handle.name
-
-                    this.resizeStartMouse = {
-                        x: worldX,
-                        y: worldY
-                    }
-
-                    this.resizeStartBounds = {
+                selectionRenderer.drawSelection(
+                    ctx,
+                    {
                         x: element.position.x,
                         y: element.position.y,
                         width: element.size.width,
                         height: element.size.height
+                    },
+                    zoom,
+                    {
+                        style: 'solid',
+                        color: '#7bb4f1',
+                        lineWidth: 2,
+                        padding: SELECTION_PADDING,
+                        rotation: element.rotation,
+                        handles: isSingle,
+                        rotateHandle: isSingle,
+                        hoveredHandle
                     }
-
-                    return
-                }
+                )
 
             }
+        }
+    }
 
-            if (hitTest(element, worldX, worldY)) {
-                this.startDrag(worldX, worldY, selectedIds)
-            }
+    private beginPointerInteraction(
+        e: MouseEvent
+    ) {
+        this.didDrag = false
+
+        const mousePosition = this.getWorldPosition(e)
+        const selectedIds = this.refs.selectedElementIdsRef.current
+
+        if (selectedIds.length === 0) return
+
+        if (selectedIds.length > 1) {
+            this.beginMultiSelectionInteraction(mousePosition, selectedIds)
+        } else {
+            this.beginSingleSelectionInteraction(mousePosition, selectedIds[0])
+        }
+    }
+
+    private beginMultiSelectionInteraction(
+        mousePosition: { x: number; y: number },
+        selectedIds: string[]
+    ) {
+        this.tryStartDrag(mousePosition, selectedIds)
+    }
+
+    private beginSingleSelectionInteraction(
+        mousePosition: { x: number, y: number },
+        selectedId: string
+    ) {
+
+        this.tryStartRotate(mousePosition, selectedId)
+        this.tryStartResize(mousePosition, selectedId)
+        this.tryStartDrag(mousePosition, [selectedId])
+    }
+
+    private tryStartRotate(
+        mousePosition: { x: number, y: number },
+        selectedId: string
+    ) {
+        if (this.hasActivePointerInteraction()) return
+
+        const element = this.findSelectedElement(selectedId)
+        if (!element) return
+
+        const zoom = this.refs.zoomRef.current
+
+        const localMousePosition = toLocalSpace(mousePosition.x, mousePosition.y, element)
+        const rotateHandlePosition = getRotateHandlePosition(element, SELECTION_PADDING, zoom)
+        const handleHitSize = HANDLE_SIZE / zoom
+        const rotateHandlePressed =
+            localMousePosition.x >= rotateHandlePosition.x - handleHitSize / 2 &&
+            localMousePosition.x <= rotateHandlePosition.x + handleHitSize / 2 &&
+            localMousePosition.y >= rotateHandlePosition.y - handleHitSize / 2 &&
+            localMousePosition.y <= rotateHandlePosition.y + handleHitSize / 2
+
+        if (!rotateHandlePressed) return false
+        this.startRotate(mousePosition, element)
+    }
+
+    private startRotate(
+        mousePosition: { x: number, y: number },
+        element: Element
+    ) {
+        this.isRotating = true
+        const elementCenter = {
+            x: element.position.x + element.size.width / 2,
+            y: element.position.y + element.size.height / 2
+        }
+
+        this.rotateStartAngle = Math.atan2(mousePosition.y - elementCenter.y, mousePosition.x - elementCenter.x) * 180 / Math.PI
+        this.rotateStartElementAngle = element.rotation
+    }
+
+    private tryStartResize(
+        mousePosition: { x: number, y: number },
+        selectedId: string
+    ) {
+        if (this.hasActivePointerInteraction()) return
+
+        const element = this.findSelectedElement(selectedId)
+        if (!element) return
+
+        const zoom = this.refs.zoomRef.current
+
+        const localMousePosition = toLocalSpace(mousePosition.x, mousePosition.y, element)
+        const handleHitSize = HANDLE_SIZE / zoom
+        const resizeHandles = getHandlePositions(element, SELECTION_PADDING)
+
+        for (const handle of resizeHandles) {
+            const handlePressed =
+                localMousePosition.x >= handle.x - handleHitSize / 2 &&
+                localMousePosition.x <= handle.x + handleHitSize / 2 &&
+                localMousePosition.y >= handle.y - handleHitSize / 2 &&
+                localMousePosition.y <= handle.y + handleHitSize / 2
+            if (!handlePressed) continue
+
+            this.startResize(mousePosition, element, handle.name)
 
             return
         }
+    }
+
+    private startResize(
+        mousePosition: { x: number; y: number },
+        element: Element,
+        handle: HandleName
+    ) {
+        this.isResizing = true
+        this.activeHandle = handle
+
+        this.resizeStartMouse = {
+            x: mousePosition.x,
+            y: mousePosition.y
+        }
+
+        this.resizeStartBounds = {
+            x: element.position.x,
+            y: element.position.y,
+            width: element.size.width,
+            height: element.size.height
+        }
+    }
+
+    private tryStartDrag(
+        mousePosition: { x: number, y: number },
+        selectedIds: string[]
+    ) {
+        if (this.isRotating || this.isResizing) return
+        const selectionPressed = this.pointHitsSelectedElements(
+            mousePosition.x,
+            mousePosition.y,
+            selectedIds
+        )
+
+        if (!selectionPressed) return
+        this.startDrag(mousePosition.x, mousePosition.y, selectedIds)
+    }
+
+    private pointHitsSelectedElements(
+        x: number,
+        y: number,
+        selectedIds: string[]
+    ) {
+        const selectedSet = new Set(selectedIds)
+
+        for (const layer of this.refs.layersRef.current) {
+            if (!layer.visible || layer.locked) continue
+
+            for (const element of layer.elements) {
+                if (selectedSet.has(element.id) && hitTest(element, x, y)) {
+                    return true
+                }
+            }
+        }
+
+        return false
+    }
+
+    private startDrag(
+        worldX: number,
+        worldY: number,
+        selectedIds: string[]
+    ) {
+        this.isDragging = true
+
+        this.dragStartMouse = {
+            x: worldX,
+            y: worldY
+        }
+
+        this.dragStartPositions.clear()
+
+        const selectedSet = new Set(selectedIds)
+
+        for (const layer of this.refs.layersRef.current) {
+            if (layer.locked) continue
+
+            for (const element of layer.elements) {
+                if (!selectedSet.has(element.id)) continue
+
+                this.dragStartPositions.set(
+                    element.id,
+                    {
+                        layerId: layer.id,
+                        x: element.position.x,
+                        y: element.position.y
+                    }
+                )
+            }
+        }
+    }
+
+
+    private updatePointerInteraction(
+        e: MouseEvent
+    ) {
+        this.detectHandleHover(e)
+
+        if (this.isDragging) this.applyDrag(e)
+        if (this.isResizing) this.applyResize(e)
+        if (this.isRotating) this.applyRotate(e)
     }
 
     private detectHandleHover(e: MouseEvent) {
@@ -246,154 +421,6 @@ export class SelectTool implements InteractionTool {
         this.canvas.style.cursor = 'default'
 
         this.refs.rendererRef.current?.requestFrame()
-    }
-
-    private pointHitsSelectedElements(
-        x: number,
-        y: number,
-        selectedIds: string[]
-    ) {
-        const selectedSet = new Set(selectedIds)
-
-        for (const layer of this.refs.layersRef.current) {
-            if (!layer.visible || layer.locked) continue
-
-            for (const element of layer.elements) {
-                if (selectedSet.has(element.id) && hitTest(element, x, y)) {
-                    return true
-                }
-            }
-        }
-
-        return false
-    }
-
-
-    onMouseMove(e: MouseEvent) {
-        this.detectHandleHover(e)
-
-        if (this.isDragging) this.applyDrag(e)
-
-        if (this.isResizing) this.applyResize(e)
-
-        if (this.isRotating) this.applyRotate(e)
-    }
-
-    onMouseUp(_e: MouseEvent) {
-        this.isDragging = false
-        this.isResizing = false
-        this.isRotating = false
-        this.activeHandle = null
-        this.dragStartPositions.clear()
-    }
-
-    onClick(e: MouseEvent) {
-        if (this.didDrag) {
-            this.didDrag = false
-            return
-        }
-
-        this.handleSelectClick(e)
-    }
-
-    private handleSelectClick(e: MouseEvent) {
-        const worldX = (e.offsetX - this.refs.panRef.current.x) / this.refs.zoomRef.current
-        const worldY = (e.offsetY - this.refs.panRef.current.y) / this.refs.zoomRef.current
-
-        const hits: string[] = []
-
-        for (const layer of this.refs.layersRef.current) {
-            if (!layer.visible || layer.locked) continue
-            if (layer.id !== this.refs.activeLayerIdRef.current) continue
-
-            for (let i = layer.elements.length - 1; i >= 0; i--) {
-                const element = layer.elements[i]
-                if (hitTest(element, worldX, worldY)
-                ) {
-                    hits.push(element.id)
-                }
-            }
-        }
-
-        const selectedIds = this.refs.selectedElementIdsRef.current
-
-        //empty click
-        if (hits.length === 0) {
-            if (!e.shiftKey) this.actions.setSelectedElements([])
-            return
-        }
-
-        //shift-click
-        if (e.shiftKey) {
-            const clickedId = hits[0]
-
-            if (selectedIds.includes(clickedId)) {
-                this.actions.setSelectedElements(selectedIds.filter(id => id !== clickedId))
-            } else {
-                this.actions.setSelectedElements([...selectedIds, clickedId])
-            }
-            return
-        }
-
-        //normal click
-        if (hits.length === 1) {
-            this.actions.setSelectedElements([hits[0]])
-            return
-        }
-
-        //click-cycling (if single-select)
-        if (selectedIds.length === 1) {
-            const currentIndex = hits.indexOf(selectedIds[0])
-
-            this.actions.setSelectedElements([hits[(currentIndex + 1) % hits.length]])
-
-            return
-        }
-
-        this.actions.setSelectedElements([hits[0]])
-    }
-
-    private getWorldPosition(e: MouseEvent) {
-        const rect = this.canvas.getBoundingClientRect()
-
-        return {
-            x: (e.clientX - rect.left - this.refs.panRef.current.x) / this.refs.zoomRef.current,
-            y: (e.clientY - rect.top - this.refs.panRef.current.y) / this.refs.zoomRef.current
-        }
-    }
-
-    private startDrag(
-        worldX: number,
-        worldY: number,
-        selectedIds: string[]
-    ) {
-        this.isDragging = true
-
-        this.dragStartMouse = {
-            x: worldX,
-            y: worldY
-        }
-
-        this.dragStartPositions.clear()
-
-        const selectedSet = new Set(selectedIds)
-
-        for (const layer of this.refs.layersRef.current) {
-            if (layer.locked) continue
-
-            for (const element of layer.elements) {
-                if (!selectedSet.has(element.id)) continue
-
-                this.dragStartPositions.set(
-                    element.id,
-                    {
-                        layerId: layer.id,
-                        x: element.position.x,
-                        y: element.position.y
-                    }
-                )
-            }
-        }
     }
 
     private applyDrag(e: MouseEvent) {
@@ -496,46 +523,107 @@ export class SelectTool implements InteractionTool {
         }
     }
 
-    draw(
-        ctx: CanvasRenderingContext2D,
-        layers: Layer[],
-        zoom: number,
-        selectionRenderer: SelectionRenderer
-    ) {
-        const selectedIds = this.refs.selectedElementIdsRef.current
-        if (selectedIds.length === 0) return
+    private endPointerInteraction() {
+        this.endDrag()
+        this.endResize()
+        this.endRotate()
+    }
 
-        const selectedSet = new Set(selectedIds)
-        const isSingle = selectedIds.length === 1
-        const hoveredHandle = this.refs.hoveredHandleRef.current
+    private endDrag() {
+        this.isDragging = false
+        this.dragStartPositions.clear()
+    }
 
+    private endResize() {
+        this.isResizing = false
+        this.activeHandle = null
+    }
 
-        for (const layer of layers) {
-            for (const element of layer.elements) {
-                if (!selectedSet.has(element.id)) continue
+    private endRotate() {
+        this.isRotating = false
+    }
 
-                selectionRenderer.drawSelection(
-                    ctx,
-                    {
-                        x: element.position.x,
-                        y: element.position.y,
-                        width: element.size.width,
-                        height: element.size.height
-                    },
-                    zoom,
-                    {
-                        style: 'solid',
-                        color: '#7bb4f1',
-                        lineWidth: 2,
-                        padding: SELECTION_PADDING,
-                        rotation: element.rotation,
-                        handles: isSingle,
-                        rotateHandle: isSingle,
-                        hoveredHandle
-                    }
-                )
+    private handleSelectClick(e: MouseEvent) {
+        const worldX = (e.offsetX - this.refs.panRef.current.x) / this.refs.zoomRef.current
+        const worldY = (e.offsetY - this.refs.panRef.current.y) / this.refs.zoomRef.current
 
+        const hits: string[] = []
+
+        for (const layer of this.refs.layersRef.current) {
+            if (!layer.visible || layer.locked) continue
+            if (layer.id !== this.refs.activeLayerIdRef.current) continue
+
+            for (let i = layer.elements.length - 1; i >= 0; i--) {
+                const element = layer.elements[i]
+                if (hitTest(element, worldX, worldY)
+                ) {
+                    hits.push(element.id)
+                }
             }
         }
+
+        const selectedIds = this.refs.selectedElementIdsRef.current
+
+        //empty click
+        if (hits.length === 0) {
+            if (!e.shiftKey) this.actions.setSelectedElements([])
+            return
+        }
+
+        //shift-click
+        if (e.shiftKey) {
+            const clickedId = hits[0]
+
+            if (selectedIds.includes(clickedId)) {
+                this.actions.setSelectedElements(selectedIds.filter(id => id !== clickedId))
+            } else {
+                this.actions.setSelectedElements([...selectedIds, clickedId])
+            }
+            return
+        }
+
+        //normal click
+        if (hits.length === 1) {
+            this.actions.setSelectedElements([hits[0]])
+            return
+        }
+
+        //click-cycling (if single-select)
+        if (selectedIds.length === 1) {
+            const currentIndex = hits.indexOf(selectedIds[0])
+
+            this.actions.setSelectedElements([hits[(currentIndex + 1) % hits.length]])
+
+            return
+        }
+
+        this.actions.setSelectedElements([hits[0]])
+    }
+
+    //shared utility methods
+    private getWorldPosition(e: MouseEvent) {
+        const rect = this.canvas.getBoundingClientRect()
+
+        return {
+            x: (e.clientX - rect.left - this.refs.panRef.current.x) / this.refs.zoomRef.current,
+            y: (e.clientY - rect.top - this.refs.panRef.current.y) / this.refs.zoomRef.current
+        }
+    }
+
+    private findSelectedElement(
+        selectedId: string
+    ): Element | null {
+        for (const layer of this.refs.layersRef.current) {
+            if (layer.locked) continue
+
+            const element = layer.elements.find(element => element.id === selectedId)
+            if (element) return element
+        }
+
+        return null
+    }
+
+    private hasActivePointerInteraction() {
+        return (this.isDragging || this.isResizing || this.isRotating)
     }
 }
