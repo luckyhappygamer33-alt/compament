@@ -19,6 +19,10 @@ export class ImageTool implements ElementTool {
         this.refs = refs
     }
 
+    onClick(_e: MouseEvent): void {
+        //empty, needed due to interface
+    }
+
     draw(
         ctx: CanvasContext,
         element: ImageElement
@@ -62,9 +66,5 @@ export class ImageTool implements ElementTool {
         )
 
         ctx.restore()
-    }
-
-    onClick(_e: MouseEvent): void {
-        //empty, needed due to interface
     }
 }
