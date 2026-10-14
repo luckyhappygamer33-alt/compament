@@ -28,6 +28,14 @@ const makeRootLayer = (): Layer => ({
     elements: [],
 })
 
+const EMPTY_SELECTION: string[] = []
+
+export const selectActiveSelection = (state: EditorStore): string[] => {
+    const layerId = state.activeLayerId
+
+    return layerId ? (state.selectionsByLayerId[layerId] ?? EMPTY_SELECTION) : EMPTY_SELECTION
+}
+
 type Tool = 'select' | 'rectangle' | 'ellipse' | 'brush' | 'rectangleSelect'
 
 // ----------------------------------------------------------------
@@ -46,9 +54,7 @@ interface EditorStore {
     // ID of the currently selected layer in the layer panel
     activeLayerId: string | null
 
-    // ID of the currently selected element on the canvas (null = nothing selected)
-    selectedElementId: string | null,
-    selectedElementIds: string[],
+    selectionsByLayerId: Record<string, string[]>
 
     activeTool: Tool
 
@@ -76,7 +82,6 @@ interface EditorStore {
     updateSelectedElements: (updater: (element: Element) => Element) => void
     deleteElement: (layerId: string, elementId: string) => void
     deleteSelectedElements: () => void
-    setSelectedElement: (id: string | null) => void
     setSelectedElements: (ids: string[]) => void
 }
 
@@ -92,8 +97,7 @@ export const useEditorStore = create<EditorStore>()((set, get) => ({
     artboardSize: null,
     layers: [],
     activeLayerId: null,
-    selectedElementId: null,
-    selectedElementIds: [],
+    selectionsByLayerId: {},
     activeTool: 'select',
 
     // ---- ACTIONS ----
@@ -111,7 +115,7 @@ export const useEditorStore = create<EditorStore>()((set, get) => ({
             artboardSize: { width, height },
             layers: [firstLayer, rootLayer],
             activeLayerId: firstLayer.id,
-            selectedElementId: null,
+            selectionsByLayerId: {},
             activeTool: 'select'
         })
     },
@@ -126,6 +130,10 @@ export const useEditorStore = create<EditorStore>()((set, get) => ({
         set(state => ({
             layers: [newLayer, ...state.layers],
             activeLayerId: newLayer.id,
+            selectionsByLayerId: {
+                ...state.selectionsByLayerId,
+                [newLayer.id]: [],
+            }
         }))
     },
 
@@ -151,49 +159,82 @@ export const useEditorStore = create<EditorStore>()((set, get) => ({
     // INVARIANT: if only root layer exists, do nothing — the root layer cannot be deleted.
     // After deletion, the first remaining layer becomes active.
     deleteLayer: (id) => {
-        const { layers } = get()
-        const target = layers.find(l => l.id === id)
+        const state = get()
+        const target = state.layers.find(l => l.id === id)
 
         if (!target || target.isRoot) return   // only rule: can't delete root
 
+        const layers = state.layers.filter(l => l.id !== id)
+
+        const activeLayerId = state.activeLayerId === id
+            ? (layers.find(l => !l.isRoot)?.id ?? layers[0]?.id ?? null)
+            : state.activeLayerId
+
+        const selectionsByLayerId = { ...state.selectionsByLayerId }
+        delete selectionsByLayerId[id]
+
         deleteBuffer(id)
 
-        const remaining = layers.filter(l => l.id !== id)
         set({
-            layers: remaining,
-            activeLayerId: remaining[0].id,
+            layers,
+            activeLayerId,
+            selectionsByLayerId,
         })
     },
 
     mergeLayer: (id) => {
-        const { layers, activeLayerId } = get()  // one call, gets everything you need
-        const target = layers.find(l => l.id === id)
-        if (!target || target.isRoot) return
+        const state = get()  // one call, gets everything you need
+        const { layers, activeLayerId } = state
 
         const layerIndex = layers.findIndex(l => l.id === id)
-        if (layerIndex === -1 || layerIndex === layers.length - 1) return
+        if (layerIndex < 0 || layerIndex >= layers.length - 1) return
 
-        const newLayers = [...layers]
-        const destinationLayer = newLayers[layerIndex + 1]
-        if (destinationLayer.isRoot) return
+        const source = layers[layerIndex]
+        const destination = layers[layerIndex + 1]
 
-        const newActiveId = id === activeLayerId ? destinationLayer.id : activeLayerId
+        if (destination.isRoot || source.isRoot) return
 
         // merge pixel buffers — stamp source pixels onto destination
-        mergeBuffer(id, destinationLayer.id)
+        mergeBuffer(id, destination.id)
 
-        destinationLayer.elements = [...destinationLayer.elements, ...newLayers[layerIndex].elements]
-        newLayers[layerIndex + 1] = destinationLayer
+        const mergedDestination: Layer = {
+            ...destination,
+            elements: [...destination.elements, ...source.elements],
+        }
 
-        newLayers.splice(layerIndex, 1)
+        const nextLayers = [...layers]
+        nextLayers.splice(layerIndex, 2, mergedDestination)
+
+        const mergedIds = [...new Set([
+            ...(state.selectionsByLayerId[destination.id] ?? []),
+            ...(state.selectionsByLayerId[id] ?? []),
+        ])]
+
+        const selectionsByLayerId = { ...state.selectionsByLayerId }
+
+        delete selectionsByLayerId[id]
+        selectionsByLayerId[destination.id] = mergedIds
+
+        const nextActiveId = activeLayerId === id ? destination.id : activeLayerId
 
         deleteBuffer(id)
 
-        set({ layers: newLayers, activeLayerId: newActiveId })
+        set({
+            layers: nextLayers,
+            activeLayerId: nextActiveId,
+            selectionsByLayerId,
+        })
+
     },
 
     // Select a layer — drives what the property panel shows
-    setActiveLayer: (id) => set({ activeLayerId: id }),
+    setActiveLayer: (id) => set(state => {
+        if (id === state.activeLayerId || !state.layers.some(l => l.id === id)) return state
+
+        return {
+            activeLayerId: id,
+        }
+    }),
 
     // Rename a layer in place
     renameLayer: (id, name) =>
@@ -204,17 +245,17 @@ export const useEditorStore = create<EditorStore>()((set, get) => ({
     // Toggle a layer's visibility (eye icon)
     toggleLayerVisibility: (id) => {
         set(state => {
-            const layer = state.layers.find(l => l.id === id)
-            const gettingInvisible = layer && layer.visible
-            const layerContainsSelected = layer?.elements.some(e => e.id === state.selectedElementId)
+            const target = state.layers.find(l => l.id === id)
+            if (!target) return state
+
+            const layers = state.layers.map(l => l.id === id ? { ...l, visible: !l.visible } : l)
+
+            const selectionsByLayerId = target.visible ? { ...state.selectionsByLayerId, [id]: [] }
+                : state.selectionsByLayerId
+
             return {
-                layers: state.layers.map(l =>
-                    l.id === id ? { ...l, visible: !l.visible } : l
-                ),
-                // deselect if the layer being hidden contains the selected element
-                selectedElementId: gettingInvisible && layerContainsSelected
-                    ? null
-                    : state.selectedElementId
+                layers,
+                selectionsByLayerId
             }
         })
     },
@@ -222,17 +263,19 @@ export const useEditorStore = create<EditorStore>()((set, get) => ({
     // Toggle a layer's locked state (lock icon)
     toggleLayerLock: (id) => {
         set(state => {
-            const layer = state.layers.find(l => l.id === id)
-            const gettingLocked = layer && !layer.locked
-            const layerContainsSelected = layer?.elements.some(e => e.id === state.selectedElementId)
+            const target = state.layers.find(l => l.id === id)
+            if (!target) return state
+
+            const layers = state.layers.map(
+                l => l.id === id ? { ...l, locked: !l.locked } : l
+            )
+            const selectionsByLayerId = !target.locked
+                ? { ...state.selectionsByLayerId, [id]: [] }
+                : state.selectionsByLayerId
+
             return {
-                layers: state.layers.map(l =>
-                    l.id === id ? { ...l, locked: !l.locked } : l
-                ),
-                // deselect if the layer being locked contains the selected element
-                selectedElementId: gettingLocked && layerContainsSelected
-                    ? null
-                    : state.selectedElementId
+                layers,
+                selectionsByLayerId,
             }
         })
     },
@@ -266,88 +309,119 @@ export const useEditorStore = create<EditorStore>()((set, get) => ({
 
     updateSelectedElements: updater =>
         set(state => {
-            if (state.selectedElementIds.length === 0) {
+            const activeLayer = state.layers.find(
+                l => l.id === state.activeLayerId
+            )
+
+            const selectedIds = selectActiveSelection(state)
+
+            if (!activeLayer
+                || activeLayer.locked
+                || !activeLayer.visible
+                || selectedIds?.length === 0) {
                 return state
             }
 
-            const selectedSet = new Set(state.selectedElementIds)
+            const selectedSet = new Set(selectedIds)
 
             return {
-                layers: state.layers.map(layer => ({
-                    ...layer,
-                    elements: layer.elements.map(element => selectedSet.has(element.id) ? updater(element) : element)
-                }))
+                layers: state.layers.map(layer =>
+                    layer.id === activeLayer.id
+                        ? {
+                            ...layer,
+                            elements: layer.elements.map(element =>
+                                selectedSet.has(element.id) ? updater(element) : element
+                            )
+                        }
+                        : layer
+                )
             }
         }),
 
     // Remove an element from a layer
-    deleteElement: (layerId, elementId) =>
-        set(state => {
-            const selectedElementIds = state.selectedElementIds.filter(id => id !== elementId)
-
-            return {
-                layers: state.layers.map(layer =>
-                    layer.id === layerId ? {
-                        ...layer,
-                        elements: layer.elements.filter(element => element.id !== elementId)
-                    } : layer
-                ),
-                selectedElementIds,
-                selectedElementId: selectedElementIds.length === 1 ? selectedElementIds[0] : null
-            }
-
-        }),
-
-    deleteSelectedElements: () => {
-        set(state => {
-            if (state.selectedElementIds.length === 0) return state
-
-            const selectedSet = new Set(state.selectedElementIds)
-
-            return {
-                layers: state.layers.map(layer => ({
+    deleteElement: (layerId, elementId) => set(state => {
+        const layers = state.layers.map(layer =>
+            layer.id === layerId
+                ? {
                     ...layer,
-                    elements: layer.elements.filter(element => !selectedSet.has(element.id))
-                })
+                    elements: layer.elements.filter(
+                        element => element.id !== elementId
+                    ),
+                }
+                : layer
+        )
 
-                ),
+        const ids = (state.selectionsByLayerId[layerId] ?? [])
+            .filter(id => id !== elementId)
 
-                selectedElementIds: [],
-                selectedElementId: null
-            }
-        })
-    },
+        const selectionsByLayerId = {
+            ...state.selectionsByLayerId,
+            [layerId]: ids,
+        }
+
+        return {
+            layers,
+            selectionsByLayerId,
+        }
+    }),
+
+    deleteSelectedElements: () => set(state => {
+        const layerId = state.activeLayerId
+        const selectedIds = selectActiveSelection(state)
+
+        if (
+            !layerId || selectedIds.length === 0
+        ) return state
+
+        const selectedSet = new Set(selectedIds)
+
+        return {
+            layers: state.layers.map(layer =>
+                layer.id === layerId
+                    ? {
+                        ...layer,
+                        elements: layer.elements.filter(
+                            element => !selectedSet.has(element.id)
+                        ),
+                    }
+                    : layer
+            ),
+            selectionsByLayerId: {
+                ...state.selectionsByLayerId,
+                [layerId]: [],
+            },
+        }
+    }),
 
     // Track which element is selected on the canvas
-    setSelectedElement: id =>
-        set({
-            selectedElementId: id,
-            selectedElementIds: id ? [id] : []
-        }),
+    setSelectedElements: ids => set(state => {
+        const activeLayer = state.layers.find(
+            l => l.id === state.activeLayerId
+        )
 
-    setSelectedElements: (ids) => set(
-        state => {
-            const selectedSet = new Set(ids)
+        if (
+            !activeLayer ||
+            !activeLayer.visible ||
+            activeLayer.locked
+        ) return state
 
-            const selectedElements = state.layers.flatMap(
-                layer => layer.elements.filter(element =>
-                    selectedSet.has(element.id)
-                )
-            )
+        const validIds = new Set(
+            activeLayer.elements.map(element => element.id)
+        )
 
-            console.log("selection: ", selectedElements)
+        const selection = [
+            ...new Set(ids.filter(id => validIds.has(id))),
+        ]
 
-            return {
-                selectedElementIds: ids,
-                selectedElementId: ids.length === 1 ? ids[0] : null
-            }
+        return {
+            selectionsByLayerId: {
+                ...state.selectionsByLayerId,
+                [activeLayer.id]: selection,
+            },
         }
-    ),
+    }),
 
 }))
 
-
-// ----------------------------------------------------------------
-// Export the uid helper so other files can use it when creating elements
 // ----------------------------------------------------------------
 export { uid }

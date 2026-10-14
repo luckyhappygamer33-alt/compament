@@ -23,7 +23,6 @@ interface SelectToolRefs {
     panRef: RefObject<{ x: number; y: number }>
     activeLayerIdRef: RefObject<string | null>
     layersRef: RefObject<Layer[]>
-    selectedElementIdRef: RefObject<string | null>
     selectedElementIdsRef: RefObject<string[]>
     hoveredHandleRef: RefObject<HandleName | null>
     rendererRef: RefObject<Renderer | null>
@@ -35,8 +34,6 @@ interface SelectToolActions {
         elementId: string,
         patch: Partial<Element>
     ) => void
-
-    setSelectedElement: (id: string | null) => void
     setSelectedElements: (ids: string[]) => void
 }
 
@@ -107,6 +104,13 @@ export class SelectTool implements InteractionTool {
         }
 
         this.handleSelectClick(e)
+    }
+
+    ///
+    onActiveLayerChanged() {
+        this.endPointerInteraction()
+        this.didDrag = false
+        this.clearHandlerHover()
     }
 
     draw(

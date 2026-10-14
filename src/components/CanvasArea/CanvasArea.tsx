@@ -1,7 +1,7 @@
 import './CanvasArea.css'
 
 import { useRef, useEffect, useState, forwardRef, useImperativeHandle } from 'react'
-import { useEditorStore } from '../../store/editorStore'
+import { useEditorStore, selectActiveSelection } from '../../store/editorStore'
 import Breadcrumb from '../Breadcrumb/Breadcrumb'
 import { type HandleName } from './CanvasTypes'
 
@@ -34,15 +34,16 @@ const CanvasArea = forwardRef<CanvasAreaHandler>((_, ref) => {
     const rendererRef = useRef<Renderer | null>(null)
     const handlerRef = useRef<InputHandler | null>(null)
 
+    ///
+    const selectToolRef = useRef<SelectTool | null>(null)
+
     const artboardSize = useEditorStore(state => state.artboardSize)
     const activeTool = useEditorStore(state => state.activeTool)
     const activeLayerId = useEditorStore(state => state.activeLayerId)
     const addElement = useEditorStore(state => state.addElement)
     const layers = useEditorStore(state => state.layers)
-    const setSelectedElement = useEditorStore(state => state.setSelectedElement)
     const setSelectedElements = useEditorStore(state => state.setSelectedElements)
-    const selectedElementId = useEditorStore(state => state.selectedElementId)
-    const selectedElementIds = useEditorStore(state => state.selectedElementIds)
+    const selectedElementIds = useEditorStore(selectActiveSelection)
     const updateElement = useEditorStore(state => state.updateElement)
     const deleteElement = useEditorStore(state => state.deleteElement)
 
@@ -56,7 +57,6 @@ const CanvasArea = forwardRef<CanvasAreaHandler>((_, ref) => {
     const panRef = useRef(pan)
     const activeToolRef = useRef(activeTool)
     const activeLayerIdRef = useRef(activeLayerId)
-    const selectedElementIdRef = useRef(selectedElementId)
     const selectedElementIdsRef = useRef(selectedElementIds)
     const layersRef = useRef(layers)
 
@@ -77,7 +77,6 @@ const CanvasArea = forwardRef<CanvasAreaHandler>((_, ref) => {
         activeToolRef.current = activeTool
         activeLayerIdRef.current = activeLayerId
         layersRef.current = layers
-        selectedElementIdRef.current = selectedElementId
         selectedElementIdsRef.current = selectedElementIds
         artboardSizeRef.current = artboardSize
     })
@@ -121,17 +120,17 @@ const CanvasArea = forwardRef<CanvasAreaHandler>((_, ref) => {
                 panRef,
                 activeLayerIdRef,
                 layersRef,
-                selectedElementIdRef,
                 selectedElementIdsRef,
                 hoveredHandleRef,
                 rendererRef
             },
             {
                 updateElement,
-                setSelectedElement,
                 setSelectedElements
             },
         )
+
+        selectToolRef.current = selectTool
 
         const rectangleSelectTool = new RectangleSelectTool(
             canvas,
@@ -195,7 +194,6 @@ const CanvasArea = forwardRef<CanvasAreaHandler>((_, ref) => {
                 zoomRef,
                 artboardSizeRef,
                 layersRef,
-                selectedElementIdRef,
                 hoveredHandleRef,
                 activeLayerIdRef
             },
@@ -209,7 +207,6 @@ const CanvasArea = forwardRef<CanvasAreaHandler>((_, ref) => {
                 zoomRef,
                 panRef,
                 layersRef,
-                selectedElementIdRef,
                 activeToolRef,
                 activeLayerIdRef,
                 rendererRef,
@@ -219,7 +216,6 @@ const CanvasArea = forwardRef<CanvasAreaHandler>((_, ref) => {
                 setZoom,
                 setPan,
                 updateElement,
-                setSelectedElement,
                 addElement
             },
             elementTool,
@@ -243,6 +239,10 @@ const CanvasArea = forwardRef<CanvasAreaHandler>((_, ref) => {
             canvas.removeEventListener('click', handler.handleMouseClick)
         }
     }, [])
+
+    useEffect(() => {
+        selectToolRef.current?.onActiveLayerChanged()
+    }, [activeLayerId])
 
     //fit artboard to viewport on project init
     useEffect(() => {
@@ -271,7 +271,7 @@ const CanvasArea = forwardRef<CanvasAreaHandler>((_, ref) => {
     // This means drag frames never trigger an unnecessary composite rebuild.
     useEffect(() => {
         rendererRef.current?.requestFrame()
-    }, [artboardSize, zoom, pan, layers, selectedElementId, selectedElementIds])
+    }, [artboardSize, zoom, pan, layers, activeLayerId, selectedElementIds])
 
     useEffect(() => {
         const canvas = canvasRef.current;

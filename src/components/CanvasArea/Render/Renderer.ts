@@ -23,7 +23,6 @@ interface RendererRefs {
     zoomRef: RefObject<number>
     artboardSizeRef: RefObject<Size | null>
     layersRef: RefObject<Layer[]>
-    selectedElementIdRef: RefObject<string | null>
     hoveredHandleRef: RefObject<HandleName | null>
     activeLayerIdRef: RefObject<string | null>
 }

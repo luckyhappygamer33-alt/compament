@@ -1,5 +1,5 @@
 import './PropertiesPanel.css'
-import { useEditorStore } from '../../store/editorStore'
+import { useEditorStore, selectActiveSelection } from '../../store/editorStore'
 import * as SelectionProperties from './SelectionProperties'
 import * as PropertyInput from './PropertyInput'
 import * as PropertyWidget from './PropertyWidget'
@@ -42,16 +42,15 @@ function updatePropertyAtPath<T extends object>(
 export default function PropertiesPanel({ onBake }: { onBake: () => void }) {
 
     const layers = useEditorStore(state => state.layers)
-    const selectedElementIds = useEditorStore(state => state.selectedElementIds)
+    const selectedElementIds = useEditorStore(selectActiveSelection)
     const deleteElement = useEditorStore(state => state.deleteElement)
     const setSelectedElements = useEditorStore(state => state.setSelectedElements)
     const updateElement = useEditorStore(state => state.updateElement)
+    const activeLayerId = useEditorStore(state => state.activeLayerId)
 
-    const selectedElements = layers.flatMap(layer =>
-        layer.elements.filter(element =>
-            selectedElementIds.includes(element.id)
-        )
-    )
+    const activeLayer = layers.find(layer => layer.id === activeLayerId)
+    const selectedElements = activeLayer?.elements.filter(element => selectedElementIds.includes(element.id)
+    ) ?? []
 
     const masterPropertiesObject = SelectionProperties.buildMasterPropertiesObject(selectedElements)
     const resolvedPropertyStates = SelectionProperties.resolveSelectionPropertyStates(selectedElements, masterPropertiesObject)
@@ -137,14 +136,16 @@ export default function PropertiesPanel({ onBake }: { onBake: () => void }) {
         propertyPath: string[],
         newValue: unknown
     ) {
-        for (const layer of layers) {
-            for (const element of layer.elements) {
-                if (!selectedElementIds.includes(element.id)) continue
+        if (!activeLayer) return
 
-                const updatedElement = updatePropertyAtPath(element, propertyPath, newValue)
+        for (const element of selectedElements) {
+            const updatedElement = updatePropertyAtPath(
+                element,
+                propertyPath,
+                newValue
+            )
 
-                updateElement(layer.id, element.id, updatedElement)
-            }
+            updateElement(activeLayer.id, element.id, updatedElement)
         }
     }
 
@@ -180,12 +181,10 @@ export default function PropertiesPanel({ onBake }: { onBake: () => void }) {
                                     type='button'
                                     className='element-action-button'
                                     onClick={() => {
-                                        for (const layer of layers) {
-                                            for (const element of layer.elements) {
-                                                if (selectedElementIds.includes(element.id)) {
-                                                    deleteElement(layer.id, element.id)
-                                                }
-                                            }
+                                        if (!activeLayer) return
+
+                                        for (const element of selectedElements) {
+                                            deleteElement(activeLayer.id, element.id)
                                         }
                                         setSelectedElements([])
                                     }}

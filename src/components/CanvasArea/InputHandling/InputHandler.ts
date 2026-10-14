@@ -14,7 +14,6 @@ interface InputRefs {
     zoomRef: RefObject<number>
     panRef: RefObject<{ x: number; y: number }>
     layersRef: RefObject<Layer[]>
-    selectedElementIdRef: RefObject<string | null>
     activeToolRef: RefObject<string>
     activeLayerIdRef: RefObject<string | null>
     rendererRef: RefObject<Renderer | null>
@@ -25,7 +24,6 @@ interface InputActions {
     setZoom: (z: number) => void
     setPan: (p: { x: number; y: number } | ((prev: { x: number; y: number }) => { x: number; y: number })) => void
     updateElement: (layerId: string, elementId: string, patch: Partial<Element>) => void
-    setSelectedElement: (id: string | null) => void
     addElement: (layerId: string, element: Element) => void
 }
 
