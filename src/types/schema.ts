@@ -2,23 +2,23 @@
 // PRIMITIVES — building blocks used throughout
 // ============================================================
 
-type ID = string
+type ID = string;
 
 export interface Color {
-    r: number   // 0-255
-    g: number   // 0-255
-    b: number   // 0-255
-    a: number   // 0-1
+  r: number; // 0-255
+  g: number; // 0-255
+  b: number; // 0-255
+  a: number; // 0-1
 }
 
 interface Vector2 {
-    x: number
-    y: number
+  x: number;
+  y: number;
 }
 
 export interface Size {
-    width: number
-    height: number
+  width: number;
+  height: number;
 }
 
 // ============================================================
@@ -26,16 +26,15 @@ export interface Size {
 // ============================================================
 
 type Fill = {
-    type: 'solid';
-    color: Color
-}
+  type: "solid";
+  color: Color;
+};
 
 // Shared visual properties every element can have
 interface ElementStyle {
-    fill?: Fill
-    opacity: number  // 0-1
+  fill?: Fill;
+  opacity: number; // 0-1
 }
-
 
 // ============================================================
 // ELEMENTS — the actual designed objects inside layers
@@ -43,42 +42,47 @@ interface ElementStyle {
 
 // Every element shares these base properties
 export interface BaseElement {
-    id: ID
-    position: Vector2
-    size: Size
-    rotation: number  // degrees
-    style: ElementStyle
+  id: ID;
+  position: Vector2;
+  size: Size;
+  rotation: number; // degrees
+  style: ElementStyle;
 }
 
 export interface RectangleElement extends BaseElement {
-    type: 'rectangle'
-    cornerRadius: number
+  type: "rectangle";
+  cornerRadius: number;
 }
 
 export interface EllipseElement extends BaseElement {
-    type: 'ellipse'
+  type: "ellipse";
 }
 
 export interface ImageElement extends BaseElement {
-    type: 'image'
-    src: string  // data URL or local file reference
+  type: "image";
+  src: string; // data URL or local file reference
 }
 
-export type Element =
-    | RectangleElement
-    | EllipseElement
-    | ImageElement
-
+export type Element = RectangleElement | EllipseElement | ImageElement;
 
 // ============================================================
 // LAYER — the structural slot that holds elements
 // ============================================================
 
 export interface Layer {
-    id: ID
-    name: string
-    visible: boolean
-    locked: boolean
-    isRoot: boolean
-    elements: Element[]  // all elements in this layer
+  id: ID;
+  name: string;
+  visible: boolean;
+  locked: boolean;
+  elements: Element[]; // all elements in this layer
+}
+
+export interface Editor {
+  id: ID;
+  name: string;
+  artboardSize: Size;
+  layers: Layer[];
+  activeLayerId: ID;
+  selectionsByLayerId: Record<ID, ID[]>;
+  rootElementId: ID | null;
 }
