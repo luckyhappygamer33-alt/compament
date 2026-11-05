@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Layer, Element, Size, Editor } from "../types/schema";
+import type { Layer, Element, Editor, Tool } from "../types/schema";
 import {
   createBuffer,
   deleteBuffer,
@@ -21,37 +21,22 @@ const makeLayer = (name: string): Layer => ({
   elements: [],
 });
 
-export const makeEditor = (
-  name: string,
-  width: number,
-  height: number,
-): Editor => {
-  const firstLayer = makeLayer("Layer 1");
-
-  return {
-    id: uid(),
-    name,
-    artboardSize: { width, height },
-    layers: [firstLayer],
-    activeLayerId: firstLayer.id,
-    selectionsByLayerId: {
-      [firstLayer.id]: [],
-    },
-    rootElementId: null,
-  };
-};
-
 const EMPTY_SELECTION: string[] = [];
 
 export const selectActiveSelection = (state: EditorStore): string[] => {
-  const layerId = state.activeLayerId;
+  const editor = selectActiveEditor(state);
+  if (!editor) return EMPTY_SELECTION;
 
-  return layerId
-    ? (state.selectionsByLayerId[layerId] ?? EMPTY_SELECTION)
-    : EMPTY_SELECTION;
+  return editor.selectionsByLayerId[editor.activeLayerId] ?? EMPTY_SELECTION;
 };
 
-type Tool = "select" | "rectangle" | "ellipse" | "brush" | "rectangleSelect";
+export const selectActiveEditor = (state: EditorStore): Editor | null => {
+  const id = state.activeEditorId;
+
+  if (!id) return null;
+
+  return state.editors[id] ?? null;
+};
 
 // ----------------------------------------------------------------
 // Store shape — state + actions defined together in one interface
@@ -60,24 +45,16 @@ type Tool = "select" | "rectangle" | "ellipse" | "brush" | "rectangleSelect";
 interface EditorStore {
   // ---- STATE ----
 
-  // null until the user creates a project
-  artboardSize: Size | null;
-
-  // The layer stack — always length >= 1 after project init
-  layers: Layer[];
-
-  // ID of the currently selected layer in the layer panel
-  activeLayerId: string | null;
-
-  selectionsByLayerId: Record<string, string[]>;
-
-  activeTool: Tool;
+  editors: Record<string, Editor>;
+  activeEditorId: string | null;
 
   // ---- ACTIONS ----
 
   //Project
   initProject: (width: number, height: number) => void;
-
+  createEditor: (name: string, width: number, height: number) => string;
+  setActiveEditor: (id: string) => void;
+  setActiveTool: (tool: Tool) => void;
   //Layers
   addLayer: () => void;
   moveLayer: (id: string, direction: "up" | "down") => void;
@@ -87,9 +64,6 @@ interface EditorStore {
   renameLayer: (id: string, name: string) => void;
   toggleLayerVisibility: (id: string) => void;
   toggleLayerLock: (id: string) => void;
-
-  //Tools
-  setActiveTool: (tool: Tool) => void;
 
   //Elements
   addElement: (layerId: string, element: Element) => void;
@@ -112,170 +86,288 @@ export const useEditorStore = create<EditorStore>()((set, get) => ({
   // ---- INITIAL STATE ----
   // Everything starts empty — nothing exists until initProject is called
 
-  artboardSize: null,
-  layers: [],
-  activeLayerId: null,
-  selectionsByLayerId: {},
-  activeTool: "select",
+  editors: {},
+  activeEditorId: null,
 
   // ---- ACTIONS ----
 
   // Called when the user picks dimensions and creates a new project.
   // Sets artboard size and spawns the mandatory first layer.
+
   initProject: (width, height) => {
-    const editor = makeEditor("Untitled", width, height);
-    createBuffer(editor.activeLayerId, width, height);
+    const editorId = get().createEditor("Untitled", width, height);
 
-    set({
-      artboardSize: editor.artboardSize,
-      layers: editor.layers,
-      activeLayerId: editor.activeLayerId,
-      selectionsByLayerId: {},
-      activeTool: "select",
-    });
-  },
-
-  // Add a new layer above the current stack.
-  // Automatically becomes the active layer.
-  addLayer: () => {
-    const { artboardSize } = get();
-    if (!artboardSize) return;
-    const newLayer = makeLayer(`Layer ${get().layers.length + 1}`);
-    createBuffer(newLayer.id, artboardSize.width, artboardSize.height);
+    //here is set internally cause createEditor has its own set and it has to complete before this second set()
     set((state) => ({
-      layers: [newLayer, ...state.layers],
-      activeLayerId: newLayer.id,
-      selectionsByLayerId: {
-        ...state.selectionsByLayerId,
-        [newLayer.id]: [],
-      },
+      editors: { [editorId]: state.editors[editorId] },
+      activeEditorId: editorId,
     }));
   },
 
-  moveLayer: (id, direction) => {
-    const layers = get().layers;
+  createEditor: (name, width, height) => {
+    const firstLayer = makeLayer("Layer 1");
 
-    const index = layers.findIndex((l) => l.id === id);
-    if (index === -1) return;
-    const swapIndex = direction === "up" ? index - 1 : index + 1;
+    const editor: Editor = {
+      id: uid(),
+      name,
+      artboardSize: { width, height },
+      layers: [firstLayer],
+      activeLayerId: firstLayer.id,
+      selectionsByLayerId: {
+        [firstLayer.id]: [],
+      },
+      rootElementId: null,
+      activeTool: "select",
+    };
 
-    if (swapIndex < 0 || swapIndex >= layers.length) return;
+    createBuffer(firstLayer.id, width, height);
 
-    const newLayers = [...layers];
+    set((state) => ({
+      editors: {
+        ...state.editors,
+        [editor.id]: editor,
+      },
+    }));
 
-    [newLayers[index], newLayers[swapIndex]] = [
-      newLayers[swapIndex],
-      newLayers[index],
-    ];
-
-    set({ layers: newLayers });
+    return editor.id;
   },
+
+  setActiveEditor: (id) =>
+    set((state) => {
+      if (!state.editors[id] || state.activeEditorId === id) return state;
+
+      return {
+        activeEditorId: id,
+      };
+    }),
+
+  // Add a new layer above the current stack.
+  // Automatically becomes the active layer.
+  addLayer: () =>
+    set((state) => {
+      const editor = selectActiveEditor(state);
+      if (!editor) return state;
+
+      const newLayer = makeLayer(`Layer ${editor.layers.length + 1}`);
+
+      const layers = [newLayer, ...editor.layers];
+
+      const selectionsByLayerId = {
+        ...editor.selectionsByLayerId,
+        [newLayer.id]: [],
+      };
+
+      createBuffer(
+        newLayer.id,
+        editor.artboardSize.width,
+        editor.artboardSize.height,
+      );
+
+      return {
+        editors: {
+          ...state.editors,
+          [editor.id]: {
+            ...editor,
+            layers,
+            activeLayerId: newLayer.id,
+            selectionsByLayerId,
+          },
+        },
+      };
+    }),
+
+  moveLayer: (id, direction) =>
+    set((state) => {
+      const editor = selectActiveEditor(state);
+      if (!editor) return state;
+
+      const index = editor.layers.findIndex((layer) => layer.id === id);
+      if (index === -1) return state;
+
+      const swapIndex = direction === "up" ? index - 1 : index + 1;
+
+      if (swapIndex < 0 || swapIndex >= editor.layers.length) return state;
+
+      const layers = [...editor.layers];
+      const temp = layers[index];
+      layers[index] = layers[swapIndex];
+      layers[swapIndex] = temp;
+
+      return {
+        editors: {
+          ...state.editors,
+          [editor.id]: {
+            ...editor,
+            layers,
+          },
+        },
+      };
+    }),
 
   // Delete a layer by ID.
   // INVARIANT: if only root layer exists, do nothing — the root layer cannot be deleted.
   // After deletion, the first remaining layer becomes active.
-  deleteLayer: (id) => {
-    const state = get();
-    const target = state.layers.find((l) => l.id === id);
+  deleteLayer: (id) =>
+    set((state) => {
+      const editor = selectActiveEditor(state);
+      if (!editor) return state;
 
-    if (!target || state.layers.length <= 1) return;
+      const target = editor.layers.find((layer) => layer.id === id);
+      if (!target || editor.layers.length <= 1) return state;
 
-    const layers = state.layers.filter((l) => l.id !== id);
+      const layers = editor.layers.filter((layer) => layer.id !== id);
 
-    const activeLayerId =
-      state.activeLayerId === id ? layers[0].id : state.activeLayerId;
+      const activeLayerId =
+        editor.activeLayerId === id ? layers[0].id : editor.activeLayerId;
 
-    const selectionsByLayerId = { ...state.selectionsByLayerId };
-    delete selectionsByLayerId[id];
+      const selectionsByLayerId = { ...editor.selectionsByLayerId };
+      delete selectionsByLayerId[id];
 
-    deleteBuffer(id);
+      deleteBuffer(id);
 
-    set({
-      layers,
-      activeLayerId,
-      selectionsByLayerId,
-    });
-  },
+      return {
+        editors: {
+          ...state.editors,
+          [editor.id]: {
+            ...editor,
+            layers,
+            activeLayerId,
+            selectionsByLayerId,
+          },
+        },
+      };
+    }),
 
-  mergeLayer: (id) => {
-    const state = get(); // one call, gets everything you need
-    const { layers, activeLayerId } = state;
+  mergeLayer: (id) =>
+    set((state) => {
+      const editor = selectActiveEditor(state);
+      if (!editor) return state;
 
-    const layerIndex = layers.findIndex((l) => l.id === id);
-    if (layerIndex < 0 || layerIndex >= layers.length - 1) return;
+      const layerIndex = editor.layers.findIndex((layer) => layer.id === id);
 
-    const source = layers[layerIndex];
-    const destination = layers[layerIndex + 1];
+      if (layerIndex < 0 || layerIndex >= editor.layers.length - 1) {
+        return state;
+      }
 
-    // merge pixel buffers — stamp source pixels onto destination
-    mergeBuffer(source.id, destination.id);
+      const source = editor.layers[layerIndex];
+      const destination = editor.layers[layerIndex + 1];
 
-    const mergedDestination: Layer = {
-      ...destination,
-      elements: [...destination.elements, ...source.elements],
-    };
+      // Merge raster buffers
+      mergeBuffer(source.id, destination.id);
 
-    const nextLayers = [...layers];
-    nextLayers.splice(layerIndex, 2, mergedDestination);
+      // Merge vector elements
+      const mergedDestination: Layer = {
+        ...destination,
+        elements: [...destination.elements, ...source.elements],
+      };
 
-    const mergedIds = [
-      ...new Set([
-        ...(state.selectionsByLayerId[destination.id] ?? []),
-        ...(state.selectionsByLayerId[id] ?? []),
-      ]),
-    ];
+      const layers = [...editor.layers];
+      layers.splice(layerIndex, 2, mergedDestination);
 
-    const selectionsByLayerId = { ...state.selectionsByLayerId };
+      // Merge selections
+      const mergedIds = [
+        ...new Set([
+          ...(editor.selectionsByLayerId[destination.id] ?? []),
+          ...(editor.selectionsByLayerId[source.id] ?? []),
+        ]),
+      ];
 
-    delete selectionsByLayerId[id];
-    selectionsByLayerId[destination.id] = mergedIds;
+      const selectionsByLayerId = { ...editor.selectionsByLayerId };
 
-    const nextActiveId =
-      activeLayerId === source.id ? destination.id : activeLayerId;
+      delete selectionsByLayerId[source.id];
+      selectionsByLayerId[destination.id] = mergedIds;
 
-    deleteBuffer(id);
+      // Update active layer
+      const activeLayerId =
+        editor.activeLayerId === source.id
+          ? destination.id
+          : editor.activeLayerId;
 
-    set({
-      layers: nextLayers,
-      activeLayerId: nextActiveId,
-      selectionsByLayerId,
-    });
-  },
+      // Remove obsolete raster buffer
+      deleteBuffer(source.id);
+
+      return {
+        editors: {
+          ...state.editors,
+          [editor.id]: {
+            ...editor,
+            layers,
+            activeLayerId,
+            selectionsByLayerId,
+          },
+        },
+      };
+    }),
 
   // Select a layer — drives what the property panel shows
   setActiveLayer: (id) =>
     set((state) => {
-      if (id === state.activeLayerId || !state.layers.some((l) => l.id === id))
-        return state;
+      const editor = selectActiveEditor(state);
+
+      if (!editor || id === editor.activeLayerId) return state;
+      if (!editor.layers.some((layer) => layer.id === id)) return state;
 
       return {
-        activeLayerId: id,
+        editors: {
+          ...state.editors,
+          [editor.id]: {
+            ...editor,
+            activeLayerId: id,
+          },
+        },
       };
     }),
 
   // Rename a layer in place
   renameLayer: (id, name) =>
-    set((state) => ({
-      layers: state.layers.map((l) => (l.id === id ? { ...l, name } : l)),
-    })),
+    set((state) => {
+      const editor = selectActiveEditor(state);
+      if (!editor) return state;
+
+      const target = editor.layers.find((layer) => layer.id === id);
+      if (!target || target.name === name) return state;
+
+      const layers = editor.layers.map((layer) =>
+        layer.id === id ? { ...layer, name } : layer,
+      );
+
+      return {
+        editors: {
+          ...state.editors,
+          [editor.id]: {
+            ...editor,
+            layers,
+          },
+        },
+      };
+    }),
 
   // Toggle a layer's visibility (eye icon)
   toggleLayerVisibility: (id) => {
     set((state) => {
-      const target = state.layers.find((l) => l.id === id);
+      const editor = selectActiveEditor(state);
+      if (!editor) return state;
+
+      const target = editor.layers.find((layer) => layer.id === id);
       if (!target) return state;
 
-      const layers = state.layers.map((l) =>
-        l.id === id ? { ...l, visible: !l.visible } : l,
+      const layers = editor.layers.map((layer) =>
+        layer.id === id ? { ...layer, visible: !layer.visible } : layer,
       );
 
       const selectionsByLayerId = target.visible
-        ? { ...state.selectionsByLayerId, [id]: [] }
-        : state.selectionsByLayerId;
+        ? { ...editor.selectionsByLayerId, [id]: [] }
+        : editor.selectionsByLayerId;
 
       return {
-        layers,
-        selectionsByLayerId,
+        editors: {
+          ...state.editors,
+          [editor.id]: {
+            ...editor,
+            layers,
+            selectionsByLayerId,
+          },
+        },
       };
     });
   },
@@ -283,52 +375,120 @@ export const useEditorStore = create<EditorStore>()((set, get) => ({
   // Toggle a layer's locked state (lock icon)
   toggleLayerLock: (id) => {
     set((state) => {
-      const target = state.layers.find((l) => l.id === id);
+      const editor = selectActiveEditor(state);
+      if (!editor) return state;
+
+      const target = editor.layers.find((layer) => layer.id === id);
       if (!target) return state;
 
-      const layers = state.layers.map((l) =>
-        l.id === id ? { ...l, locked: !l.locked } : l,
+      const layers = editor.layers.map((layer) =>
+        layer.id === id ? { ...layer, locked: !layer.locked } : layer,
       );
       const selectionsByLayerId = !target.locked
-        ? { ...state.selectionsByLayerId, [id]: [] }
-        : state.selectionsByLayerId;
+        ? { ...editor.selectionsByLayerId, [id]: [] }
+        : editor.selectionsByLayerId;
 
       return {
-        layers,
-        selectionsByLayerId,
+        editors: {
+          ...state.editors,
+          [editor.id]: {
+            ...editor,
+            layers,
+            selectionsByLayerId,
+          },
+        },
       };
     });
   },
 
-  setActiveTool: (tool) => set({ activeTool: tool }),
+  setActiveTool: (tool) =>
+    set((state) => {
+      const editor = selectActiveEditor(state);
+
+      if (!editor || editor.activeTool === tool) return state;
+
+      return {
+        editors: {
+          ...state.editors,
+          [editor.id]: {
+            ...editor,
+            activeTool: tool,
+          },
+        },
+      };
+    }),
 
   // Add an element to a specific layer
   addElement: (layerId, element) =>
-    set((state) => ({
-      layers: state.layers.map((l) =>
-        l.id === layerId ? { ...l, elements: [...l.elements, element] } : l,
-      ),
-    })),
+    set((state) => {
+      const editor = selectActiveEditor(state);
+      if (!editor) return state;
+
+      const target = editor.layers.find((layer) => layer.id === layerId);
+      if (!target) return state;
+
+      const layers = editor.layers.map((layers) =>
+        layers.id === layerId
+          ? { ...layers, elements: [...layers.elements, element] }
+          : layers,
+      );
+
+      return {
+        editors: {
+          ...state.editors,
+          [editor.id]: {
+            ...editor,
+            layers,
+          },
+        },
+      };
+    }),
 
   // Update specific properties of an element (spread — only what changed)
   updateElement: (layerId, elementId, changes) =>
-    set((state) => ({
-      layers: state.layers.map((l) =>
-        l.id === layerId
+    set((state) => {
+      const editor = selectActiveEditor(state);
+      if (!editor) return state;
+
+      const targetLayer = editor.layers.find((layer) => layer.id === layerId);
+
+      if (
+        !targetLayer ||
+        !targetLayer.elements.some((element) => element.id === elementId)
+      )
+        return state;
+
+      const layers = editor.layers.map((layer) =>
+        layer.id === layerId
           ? {
-              ...l,
-              elements: l.elements.map((e) =>
-                e.id === elementId ? ({ ...e, ...changes } as Element) : e,
+              ...layer,
+              elements: layer.elements.map((element) =>
+                element.id === elementId
+                  ? ({ ...element, ...changes } as Element)
+                  : element,
               ),
             }
-          : l,
-      ),
-    })),
+          : layer,
+      );
+
+      return {
+        editors: {
+          ...state.editors,
+          [editor.id]: {
+            ...editor,
+            layers,
+          },
+        },
+      };
+    }),
 
   updateSelectedElements: (updater) =>
     set((state) => {
-      const activeLayer = state.layers.find(
-        (l) => l.id === state.activeLayerId,
+      const editor = selectActiveEditor(state);
+      if (!editor) return state;
+
+      const activeLayer = editor.layers.find(
+        (layer) => layer.id === editor.activeLayerId,
       );
 
       const selectedIds = selectActiveSelection(state);
@@ -344,24 +504,39 @@ export const useEditorStore = create<EditorStore>()((set, get) => ({
 
       const selectedSet = new Set(selectedIds);
 
+      const layers = editor.layers.map((layer) =>
+        layer.id === activeLayer.id
+          ? {
+              ...layer,
+              elements: layer.elements.map((element) =>
+                selectedSet.has(element.id) ? updater(element) : element,
+              ),
+            }
+          : layer,
+      );
+
       return {
-        layers: state.layers.map((layer) =>
-          layer.id === activeLayer.id
-            ? {
-                ...layer,
-                elements: layer.elements.map((element) =>
-                  selectedSet.has(element.id) ? updater(element) : element,
-                ),
-              }
-            : layer,
-        ),
+        editors: {
+          ...state.editors,
+          [editor.id]: {
+            ...editor,
+            layers,
+          },
+        },
       };
     }),
 
   // Remove an element from a layer
   deleteElement: (layerId, elementId) =>
     set((state) => {
-      const layers = state.layers.map((layer) =>
+      const editor = selectActiveEditor(state);
+      if (!editor) return state;
+
+      const targetLayer = editor.layers.find((layer) => layer.id === layerId);
+      if (!targetLayer || !targetLayer.elements.some((e) => e.id === elementId))
+        return state;
+
+      const layers = editor.layers.map((layer) =>
         layer.id === layerId
           ? {
               ...layer,
@@ -372,44 +547,61 @@ export const useEditorStore = create<EditorStore>()((set, get) => ({
           : layer,
       );
 
-      const ids = (state.selectionsByLayerId[layerId] ?? []).filter(
-        (id) => id !== elementId,
-      );
-
       const selectionsByLayerId = {
-        ...state.selectionsByLayerId,
-        [layerId]: ids,
+        ...editor.selectionsByLayerId,
+        [layerId]: (editor.selectionsByLayerId[layerId] ?? []).filter(
+          (id) => id !== elementId,
+        ),
       };
 
       return {
-        layers,
-        selectionsByLayerId,
+        editors: {
+          ...state.editors,
+          [editor.id]: {
+            ...editor,
+            layers,
+            selectionsByLayerId,
+          },
+        },
       };
     }),
 
   deleteSelectedElements: () =>
     set((state) => {
-      const layerId = state.activeLayerId;
+      const editor = selectActiveEditor(state);
+      if (!editor) return state;
+
+      const layerId = editor.activeLayerId;
       const selectedIds = selectActiveSelection(state);
 
-      if (!layerId || selectedIds.length === 0) return state;
+      if (selectedIds.length === 0) return state;
 
       const selectedSet = new Set(selectedIds);
 
+      const layers = editor.layers.map((layer) =>
+        layer.id === layerId
+          ? {
+              ...layer,
+              elements: layer.elements.filter(
+                (element) => !selectedSet.has(element.id),
+              ),
+            }
+          : layer,
+      );
+
+      const selectionsByLayerId = {
+        ...editor.selectionsByLayerId,
+        [layerId]: [],
+      };
+
       return {
-        layers: state.layers.map((layer) =>
-          layer.id === layerId
-            ? {
-                ...layer,
-                elements: layer.elements.filter(
-                  (element) => !selectedSet.has(element.id),
-                ),
-              }
-            : layer,
-        ),
-        selectionsByLayerId: {
-          ...state.selectionsByLayerId,
-          [layerId]: [],
+        editors: {
+          ...state.editors,
+          [editor.id]: {
+            ...editor,
+            layers,
+            selectionsByLayerId,
+          },
         },
       };
     }),
@@ -417,8 +609,11 @@ export const useEditorStore = create<EditorStore>()((set, get) => ({
   // Track which element is selected on the canvas
   setSelectedElements: (ids) =>
     set((state) => {
-      const activeLayer = state.layers.find(
-        (l) => l.id === state.activeLayerId,
+      const editor = selectActiveEditor(state);
+      if (!editor) return state;
+
+      const activeLayer = editor.layers.find(
+        (layer) => layer.id === editor.activeLayerId,
       );
 
       if (!activeLayer || !activeLayer.visible || activeLayer.locked)
@@ -430,10 +625,18 @@ export const useEditorStore = create<EditorStore>()((set, get) => ({
 
       const selection = [...new Set(ids.filter((id) => validIds.has(id)))];
 
+      const selectionsByLayerId = {
+        ...editor.selectionsByLayerId,
+        [activeLayer.id]: selection,
+      };
+
       return {
-        selectionsByLayerId: {
-          ...state.selectionsByLayerId,
-          [activeLayer.id]: selection,
+        editors: {
+          ...state.editors,
+          [editor.id]: {
+            ...editor,
+            selectionsByLayerId,
+          },
         },
       };
     }),

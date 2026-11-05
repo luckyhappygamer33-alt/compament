@@ -1,31 +1,33 @@
-import './App.css'
-import { useEditorStore } from './store/editorStore'
-import Toolbar from './components/Toolbar/Toolbar'
-import PropertiesPanel from './components/PropertiesPanel/PropertiesPanel'
-import CanvasArea, { type CanvasAreaHandler } from './components/CanvasArea/CanvasArea'
-import LayersPanel from './components/LayersPanel/LayersPanel'
-import NewProjectModal from './components/NewProjectModal/NewProjectModal'
-import { useRef } from 'react'
+import "./App.css";
+import { useEditorStore, selectActiveEditor } from "./store/editorStore";
+import Toolbar from "./components/Toolbar/Toolbar";
+import PropertiesPanel from "./components/PropertiesPanel/PropertiesPanel";
+import CanvasArea, {
+  type CanvasAreaHandler,
+} from "./components/CanvasArea/CanvasArea";
+import LayersPanel from "./components/LayersPanel/LayersPanel";
+import NewProjectModal from "./components/NewProjectModal/NewProjectModal";
+import { useRef } from "react";
 
 export default function App() {
-    // artboardSize is null until initProject is called
-    // that's our signal to show the modal
-    const artboardSize = useEditorStore(state => state.artboardSize)
-    const hasProject = artboardSize !== null
+  // artboardSize is null until initProject is called
+  // that's our signal to show the modal
+  const artboardSize = useEditorStore(selectActiveEditor);
+  const hasProject = artboardSize !== null;
 
-    const canvasAreaRef = useRef<CanvasAreaHandler>(null)
+  const canvasAreaRef = useRef<CanvasAreaHandler>(null);
 
-    return (
-        <div className="app">
-            {/* Modal sits on top of everything until a project is created */}
-            {!hasProject && <NewProjectModal />}
+  return (
+    <div className="app">
+      {/* Modal sits on top of everything until a project is created */}
+      {!hasProject && <NewProjectModal />}
 
-            <Toolbar />
-            <div className="app-body">
-                <PropertiesPanel onBake={() => canvasAreaRef.current?.handleBake()} />
-                <CanvasArea ref={canvasAreaRef} />
-                <LayersPanel />
-            </div>
-        </div>
-    )
+      <Toolbar />
+      <div className="app-body">
+        <PropertiesPanel onBake={() => canvasAreaRef.current?.handleBake()} />
+        <CanvasArea ref={canvasAreaRef} />
+        <LayersPanel />
+      </div>
+    </div>
+  );
 }

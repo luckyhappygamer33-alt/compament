@@ -77,6 +77,13 @@ export interface Layer {
   elements: Element[]; // all elements in this layer
 }
 
+export type Tool =
+  | "select"
+  | "rectangle"
+  | "ellipse"
+  | "brush"
+  | "rectangleSelect";
+
 export interface Editor {
   id: ID;
   name: string;
@@ -85,4 +92,5 @@ export interface Editor {
   activeLayerId: ID;
   selectionsByLayerId: Record<ID, ID[]>;
   rootElementId: ID | null;
+  activeTool: Tool;
 }

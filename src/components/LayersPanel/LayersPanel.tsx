@@ -9,12 +9,16 @@ import {
   Plus,
   LayerArrowDown,
 } from "lucide-react";
-import { useEditorStore } from "../../store/editorStore";
+import { useEditorStore, selectActiveEditor } from "../../store/editorStore";
 import "./LayersPanel.css";
 
 export default function LayersPanel() {
-  const layers = useEditorStore((state) => state.layers);
-  const activeLayerId = useEditorStore((state) => state.activeLayerId);
+  //editor data
+  const activeEditor = useEditorStore(selectActiveEditor);
+  const layers = activeEditor?.layers ?? [];
+  const activeLayerId = activeEditor?.activeLayerId ?? null;
+
+  //store actions
   const addLayer = useEditorStore((state) => state.addLayer);
   const moveLayer = useEditorStore((state) => state.moveLayer);
   const deleteLayer = useEditorStore((state) => state.deleteLayer);
