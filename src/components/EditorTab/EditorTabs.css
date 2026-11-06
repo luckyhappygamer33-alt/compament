@@ -1,0 +1,17 @@
+.editor-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-bottom: 1px solid #444;
+  padding: 6px 10px;
+}
+
+.editor-tabs button {
+  cursor: pointer;
+  padding: 6px 12px;
+}
+
+.editor-tabs button[aria-pressed="true"] {
+  border-bottom: 2px solid #777;
+  font-weight: 700;
+}
