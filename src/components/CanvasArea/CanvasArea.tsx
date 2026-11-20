@@ -30,8 +30,8 @@ import { BrushTool } from "./Tools/BrushTool";
 import { RectangleSelectTool } from "./Tools/RectangleSelectTool";
 import { ImageTool } from "./Tools/ImageTool";
 
-const EMPTY_LAYERS: Layer[] = [];
-const EMPTY_SELECTION: string[] = [];
+const EMPTY_LAYERS: readonly Layer[] = [];
+const EMPTY_SELECTION: readonly string[] = [];
 
 export interface CanvasAreaHandler {
   handleBake: () => void;

@@ -1,184 +1,188 @@
-import { type RefObject } from 'react'
+import { type RefObject } from "react";
 
-import type { Layer, Size, Element } from '../../../types/schema'
-import type { HandleName, CanvasContext } from '../CanvasTypes'
-import { OverlayRenderer } from './OverlayRenderer'
-import { SelectionRenderer } from './SelectionRenderer'
+import type { Layer, Size, Element } from "../../../types/schema";
+import type { HandleName, CanvasContext } from "../CanvasTypes";
+import { OverlayRenderer } from "./OverlayRenderer";
+import { SelectionRenderer } from "./SelectionRenderer";
 
-import { CompositeManager } from './CompositeManager'
+import { CompositeManager } from "./CompositeManager";
 
-import type { ElementTool } from '../Tools/ElementTool'
-import type { InteractionTool } from '../Tools/InteractionTool'
+import type { ElementTool } from "../Tools/ElementTool";
+import type { InteractionTool } from "../Tools/InteractionTool";
 
-import { getBuffer } from '../BufferRegistry'
+import { getBuffer } from "../BufferRegistry";
 
 declare global {
-    interface Window {
-        __renderer: Renderer
-    }
+  interface Window {
+    __renderer: Renderer;
+  }
 }
 
 interface RendererRefs {
-    panRef: RefObject<{ x: number; y: number }>
-    zoomRef: RefObject<number>
-    artboardSizeRef: RefObject<Size | null>
-    layersRef: RefObject<Layer[]>
-    hoveredHandleRef: RefObject<HandleName | null>
-    activeLayerIdRef: RefObject<string | null>
+  panRef: RefObject<{ x: number; y: number }>;
+  zoomRef: RefObject<number>;
+  artboardSizeRef: RefObject<Size | null>;
+  layersRef: RefObject<readonly Layer[]>;
+  hoveredHandleRef: RefObject<HandleName | null>;
+  activeLayerIdRef: RefObject<string | null>;
 }
 
 export class Renderer {
-    private canvas: HTMLCanvasElement
-    private refs: RendererRefs
-    private ctx: CanvasRenderingContext2D
-    private rafId: number | null = null
+  private canvas: HTMLCanvasElement;
+  private refs: RendererRefs;
+  private ctx: CanvasRenderingContext2D;
+  private rafId: number | null = null;
 
-    private composite = new CompositeManager()
+  private composite = new CompositeManager();
 
-    private overlayRenderer: OverlayRenderer
-    private selectionRenderer = new SelectionRenderer()
+  private overlayRenderer: OverlayRenderer;
+  private selectionRenderer = new SelectionRenderer();
 
-    private elementTool: ElementTool
-    private interactionTool: InteractionTool
+  private elementTool: ElementTool;
+  private interactionTool: InteractionTool;
 
-    constructor(
-        canvas: HTMLCanvasElement,
-        overlayCanvas: HTMLCanvasElement,
-        refs: RendererRefs,
-        elementTool: ElementTool,
-        interactionTool: InteractionTool
-    ) {
-        this.canvas = canvas
-        this.refs = refs
-        const ctx = canvas.getContext('2d')
-        if (!ctx) throw new Error('Canvas 2D context (HTML canvas) not available')
-        this.ctx = ctx
+  constructor(
+    canvas: HTMLCanvasElement,
+    overlayCanvas: HTMLCanvasElement,
+    refs: RendererRefs,
+    elementTool: ElementTool,
+    interactionTool: InteractionTool,
+  ) {
+    this.canvas = canvas;
+    this.refs = refs;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Canvas 2D context (HTML canvas) not available");
+    this.ctx = ctx;
 
-        this.overlayRenderer = new OverlayRenderer(overlayCanvas)
+    this.overlayRenderer = new OverlayRenderer(overlayCanvas);
 
-        this.elementTool = elementTool
-        this.interactionTool = interactionTool
+    this.elementTool = elementTool;
+    this.interactionTool = interactionTool;
 
-        window.__renderer = this
+    window.__renderer = this;
+  }
+
+  resizeOverlay(width: number, height: number) {
+    this.overlayRenderer.resize(width, height);
+  }
+
+  private drawSelections(
+    ctx: CanvasRenderingContext2D,
+    layers: readonly Layer[],
+    zoom: number,
+    selectionRenderer: SelectionRenderer,
+  ) {
+    this.interactionTool.draw(ctx, layers, zoom, selectionRenderer);
+  }
+
+  private drawElement(ctx: CanvasContext, element: Element) {
+    this.elementTool.draw(ctx, element);
+  }
+
+  private drawLayer = (ctx: CanvasContext, layer: Layer) => {
+    const buffer = getBuffer(layer.id);
+
+    if (buffer) {
+      ctx.drawImage(buffer, 0, 0);
     }
 
-    resizeOverlay(width: number, height: number) {
-        this.overlayRenderer.resize(width, height)
+    for (const element of layer.elements) {
+      this.drawElement(ctx, element);
+    }
+  };
+
+  private drawCanvas(
+    ctx: CanvasRenderingContext2D,
+    layers: readonly Layer[],
+    activeLayerId: string | null,
+    artboardSize: Size,
+    zoom: number,
+    selectionRenderer: SelectionRenderer,
+  ) {
+    const below = this.composite.getBelow();
+    const above = this.composite.getAbove();
+    const activeLayer = layers.find((l) => l.id === activeLayerId);
+
+    // Only rebuild composite when something in the background actually changed.
+    if (this.composite.needsRebuild(layers, activeLayerId, artboardSize)) {
+      this.composite.rebuild(
+        layers,
+        activeLayerId,
+        artboardSize,
+        this.drawLayer,
+      );
     }
 
-    private drawSelections(
-        ctx: CanvasRenderingContext2D,
-        layers: Layer[],
-        zoom: number,
-        selectionRenderer: SelectionRenderer
-    ) {
-        this.interactionTool.draw(ctx, layers, zoom, selectionRenderer)
-    }
+    // 1. layers below active
+    if (below) ctx.drawImage(below, 0, 0);
 
-    private drawElement(
-        ctx: CanvasContext,
-        element: Element
-    ) {
-        this.elementTool.draw(ctx, element)
-    }
+    // 2. Active layer — always fresh so in-progress edits are visible immediately
+    if (activeLayer?.visible) this.drawLayer(ctx, activeLayer);
 
-    private drawLayer = (
-        ctx: CanvasContext,
-        layer: Layer
-    ) => {
-        const buffer = getBuffer(layer.id)
+    // 3. layers above active
+    if (above) ctx.drawImage(above, 0, 0);
 
-        if (buffer) {
-            ctx.drawImage(buffer, 0, 0)
-        }
+    this.drawSelections(ctx, layers, zoom, selectionRenderer);
+  }
 
-        for (const element of layer.elements) {
-            this.drawElement(ctx, element)
-        }
-    }
+  drawFrame() {
+    this.overlayRenderer.recordFrame();
 
-    private drawCanvas(
-        ctx: CanvasRenderingContext2D,
-        layers: Layer[],
-        activeLayerId: string | null,
-        artboardSize: Size,
-        zoom: number,
-        selectionRenderer: SelectionRenderer
-    ) {
-        const below = this.composite.getBelow()
-        const above = this.composite.getAbove()
-        const activeLayer = layers.find(l => l.id === activeLayerId)
+    const { panRef, zoomRef, artboardSizeRef, layersRef, activeLayerIdRef } =
+      this.refs;
+    const artboardSize = artboardSizeRef.current;
+    if (!artboardSize) return;
 
-        // Only rebuild composite when something in the background actually changed.
-        if (this.composite.needsRebuild(layers, activeLayerId, artboardSize)) {
-            this.composite.rebuild(layers, activeLayerId, artboardSize, this.drawLayer)
-        }
+    const layers = layersRef.current;
+    const activeLayerId = activeLayerIdRef.current;
+    const zoom = zoomRef.current;
+    const ctx = this.ctx;
 
-        // 1. layers below active
-        if (below) ctx.drawImage(below, 0, 0)
+    ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    ctx.resetTransform();
 
-        // 2. Active layer — always fresh so in-progress edits are visible immediately
-        if (activeLayer?.visible) this.drawLayer(ctx, activeLayer)
+    ctx.save();
+    ctx.translate(panRef.current.x, panRef.current.y);
+    ctx.scale(zoom, zoom);
 
-        // 3. layers above active
-        if (above) ctx.drawImage(above, 0, 0)
+    ctx.shadowColor = "rgba(0, 0, 0, 0.4)";
+    ctx.shadowBlur = 20 / zoom;
 
-        this.drawSelections(ctx, layers, zoom, selectionRenderer)
-    }
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, artboardSize.width, artboardSize.height);
 
-    drawFrame() {
-        this.overlayRenderer.recordFrame()
+    ctx.shadowColor = "transparent";
+    ctx.shadowBlur = 0;
 
-        const { panRef, zoomRef, artboardSizeRef, layersRef, activeLayerIdRef } = this.refs
-        const artboardSize = artboardSizeRef.current
-        if (!artboardSize) return
+    this.drawCanvas(
+      ctx,
+      layers,
+      activeLayerId,
+      artboardSize,
+      zoom,
+      this.selectionRenderer,
+    );
 
-        const layers = layersRef.current
-        const activeLayerId = activeLayerIdRef.current
-        const zoom = zoomRef.current
-        const ctx = this.ctx
+    ctx.restore();
+  }
 
-        ctx.clearRect(0, 0, this.canvas.width, this.canvas.height)
-        ctx.resetTransform()
+  requestFrame() {
+    if (this.rafId !== null) return; // already scheduled
+    this.rafId = requestAnimationFrame(() => {
+      this.rafId = null;
+      this.drawFrame();
+    });
+  }
 
-        ctx.save()
-        ctx.translate(panRef.current.x, panRef.current.y)
-        ctx.scale(zoom, zoom)
+  bakeElement(layerId: string, element: Element): void {
+    const buffer = getBuffer(layerId);
 
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.4)'
-        ctx.shadowBlur = 20 / zoom
+    if (!buffer) return;
 
-        ctx.fillStyle = '#ffffff'
-        ctx.fillRect(0, 0, artboardSize.width, artboardSize.height)
+    const ctx = buffer.getContext("2d");
 
-        ctx.shadowColor = 'transparent'
-        ctx.shadowBlur = 0
+    if (!ctx) return;
 
-        this.drawCanvas(ctx, layers, activeLayerId, artboardSize, zoom, this.selectionRenderer)
-
-        ctx.restore()
-    }
-
-    requestFrame() {
-        if (this.rafId !== null) return  // already scheduled
-        this.rafId = requestAnimationFrame(() => {
-            this.rafId = null
-            this.drawFrame()
-        })
-    }
-
-    bakeElement(
-        layerId: string,
-        element: Element
-    ): void {
-        const buffer = getBuffer(layerId)
-
-        if (!buffer) return
-
-        const ctx = buffer.getContext('2d')
-
-        if (!ctx) return
-
-        this.drawElement(ctx, element)
-    }
+    this.drawElement(ctx, element);
+  }
 }
