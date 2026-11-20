@@ -36,10 +36,6 @@ interface InputActions {
 }
 
 export class InputHandler {
-  private canvas: HTMLCanvasElement;
-  private refs: InputRefs;
-  private actions: InputActions;
-
   private viewportController: ViewportController;
 
   private elementTool: ElementTool;
@@ -47,17 +43,12 @@ export class InputHandler {
   private drawingTool: DrawingTool;
 
   constructor(
-    canvas: HTMLCanvasElement,
     refs: InputRefs,
     actions: InputActions,
     elementTool: ElementTool,
     interactionTool: InteractionTool,
     drawingTool: DrawingTool,
   ) {
-    this.canvas = canvas;
-    this.refs = refs;
-    this.actions = actions;
-
     this.viewportController = new ViewportController(refs, actions);
 
     this.elementTool = elementTool;

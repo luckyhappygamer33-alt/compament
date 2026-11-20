@@ -210,7 +210,6 @@ const CanvasArea = forwardRef<CanvasAreaHandler>((_, ref) => {
     );
 
     handlerRef.current = new InputHandler(
-      canvas,
       {
         zoomRef,
         panRef,
