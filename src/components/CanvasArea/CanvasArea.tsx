@@ -8,6 +8,7 @@ import {
   useImperativeHandle,
 } from "react";
 import { useEditorStore, selectActiveEditor } from "../../store/editorStore";
+import { type Layer } from "../../types/schema";
 import Breadcrumb from "../Breadcrumb/Breadcrumb";
 import { type HandleName } from "./CanvasTypes";
 
@@ -29,6 +30,9 @@ import { BrushTool } from "./Tools/BrushTool";
 import { RectangleSelectTool } from "./Tools/RectangleSelectTool";
 import { ImageTool } from "./Tools/ImageTool";
 
+const EMPTY_LAYERS: Layer[] = [];
+const EMPTY_SELECTION: string[] = [];
+
 export interface CanvasAreaHandler {
   handleBake: () => void;
 }
@@ -45,12 +49,13 @@ const CanvasArea = forwardRef<CanvasAreaHandler>((_, ref) => {
   //editor data
   const activeEditor = useEditorStore(selectActiveEditor);
   const artboardSize = activeEditor?.artboardSize ?? null;
-  const layers = activeEditor?.layers ?? [];
+  const layers = activeEditor?.layers ?? EMPTY_LAYERS;
   const activeLayerId = activeEditor?.activeLayerId ?? null;
   const activeTool = activeEditor?.activeTool ?? "select";
   const selectedElementIds = activeEditor
-    ? (activeEditor.selectionsByLayerId[activeEditor.activeLayerId] ?? [])
-    : [];
+    ? (activeEditor.selectionsByLayerId[activeEditor.activeLayerId] ??
+      EMPTY_SELECTION)
+    : EMPTY_SELECTION;
 
   //store actions
   const addElement = useEditorStore((state) => state.addElement);
